@@ -22,8 +22,10 @@ public sealed class AccountDto
     [JsonPropertyName("Balance")]
     public decimal Balance { get; init; }
 
-    [JsonPropertyName("IsPosting")]
-    public bool IsPosting { get; init; }
+    [JsonPropertyName("isNonPosting")]
+    public bool IsNonPosting { get; init; }
+
+    public bool IsPosting => !IsNonPosting;
 
     [JsonPropertyName("CogsIntent")]
     public bool CogsIntent { get; init; }
