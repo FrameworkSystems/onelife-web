@@ -1,0 +1,154 @@
+@page "/finance"
+@inject FinanceWebService Finance
+@inject NavigationManager Nav
+
+<MudText Typo="Typo.h4" Class="mb-6" Style="font-weight:700">Finance</MudText>
+
+<MudGrid Spacing="3">
+
+    @* Spending Overview *@
+    <MudItem xs="12" md="6" lg="3">
+        <MudCard Elevation="2" Style="height:100%">
+            <MudCardHeader>
+                <CardHeaderAvatar>
+                    <MudIcon Icon="@Icons.Material.Filled.DonutLarge" Color="Color.Primary" />
+                </CardHeaderAvatar>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Spending Overview</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    Bank sync coming in Phase 2.
+                </MudText>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+
+    @* Budget Overview *@
+    <MudItem xs="12" md="6" lg="3">
+        <MudCard Elevation="2" Style="height:100%">
+            <MudCardHeader>
+                <CardHeaderAvatar>
+                    <MudIcon Icon="@Icons.Material.Filled.PieChart" Color="Color.Primary" />
+                </CardHeaderAvatar>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Budget Overview</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    Budget pacing coming in Phase 2.
+                </MudText>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+
+    @* Accounts widget *@
+    <MudItem xs="12" md="6" lg="3">
+        <MudCard Elevation="2" Style="height:100%">
+            <MudCardHeader>
+                <CardHeaderAvatar>
+                    <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Color="Color.Primary" />
+                </CardHeaderAvatar>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Accounts</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                @if (_loadingAccounts)
+                {
+                    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+                }
+                else if (_accountError is not null)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true">@_accountError</MudAlert>
+                }
+                else
+                {
+                    <MudText Typo="Typo.h3" Style="font-weight:700; color:var(--ol-primary)">
+                        @_accountCount
+                    </MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">account types seeded</MudText>
+                }
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           OnClick="@(() => Nav.NavigateTo("/finance/accounts"))">
+                    View All
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudItem>
+
+    @* Quick Actions *@
+    <MudItem xs="12" md="6" lg="3">
+        <MudCard Elevation="2" Style="height:100%">
+            <MudCardHeader>
+                <CardHeaderAvatar>
+                    <MudIcon Icon="@Icons.Material.Filled.FlashOn" Color="Color.Primary" />
+                </CardHeaderAvatar>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Quick Actions</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudStack Spacing="2">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                               StartIcon="@Icons.Material.Filled.AccountBalance"
+                               OnClick="@(() => Nav.NavigateTo("/finance/accounts"))">
+                        Chart of Accounts
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
+                               StartIcon="@Icons.Material.Filled.MenuBook"
+                               OnClick="@(() => Nav.NavigateTo("/finance/ledger"))">
+                        Ledger
+                    </MudButton>
+                </MudStack>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+
+    @* Recent Transactions *@
+    <MudItem xs="12">
+        <MudCard Elevation="2">
+            <MudCardHeader>
+                <CardHeaderAvatar>
+                    <MudIcon Icon="@Icons.Material.Filled.Receipt" Color="Color.Primary" />
+                </CardHeaderAvatar>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6">Recent Transactions</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudAlert Severity="Severity.Info" Dense="true">
+                    Connect bank to see transactions — bank sync wires up in Phase 2.
+                </MudAlert>
+            </MudCardContent>
+        </MudCard>
+    </MudItem>
+
+</MudGrid>
+
+@code {
+    private bool _loadingAccounts = true;
+    private int _accountCount;
+    private string? _accountError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var accounts = await Finance.GetAccountsAsync();
+            _accountCount = accounts.Count;
+        }
+        catch (Exception ex)
+        {
+            _accountError = ex.Message;
+        }
+        finally
+        {
+            _loadingAccounts = false;
+        }
+    }
+}

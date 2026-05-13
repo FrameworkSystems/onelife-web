@@ -1,0 +1,127 @@
+@page "/finance/ledger"
+@inject FinanceWebService Finance
+
+<MudText Typo="Typo.h4" Class="mb-4" Style="font-weight:700">Ledger</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+}
+
+@* Trial Balance Summary *@
+<MudCard Elevation="2" Class="mb-6">
+    <MudCardHeader>
+        <CardHeaderAvatar>
+            <MudIcon Icon="@Icons.Material.Filled.Scale" Color="Color.Primary" />
+        </CardHeaderAvatar>
+        <CardHeaderContent>
+            <MudText Typo="Typo.h6">Trial Balance</MudText>
+        </CardHeaderContent>
+        <CardHeaderActions>
+            @if (_trialBalance is not null)
+            {
+                @if (_trialBalance.IsBalanced)
+                {
+                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.CheckCircle">
+                        Balanced
+                    </MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Color="Color.Error" Size="Size.Small" Icon="@Icons.Material.Filled.Warning">
+                        Unbalanced
+                    </MudChip>
+                }
+            }
+        </CardHeaderActions>
+    </MudCardHeader>
+    <MudCardContent>
+        @if (_trialBalance is not null)
+        {
+            <MudGrid>
+                <MudItem xs="6" sm="4">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Total Debits</MudText>
+                    <MudText Typo="Typo.h5" Style="font-weight:600">@_trialBalance.TotalDebits.ToString("C2")</MudText>
+                </MudItem>
+                <MudItem xs="6" sm="4">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Total Credits</MudText>
+                    <MudText Typo="Typo.h5" Style="font-weight:600">@_trialBalance.TotalCredits.ToString("C2")</MudText>
+                </MudItem>
+                @if (_trialBalance.AsOf.HasValue)
+                {
+                    <MudItem xs="12" sm="4">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">As Of</MudText>
+                        <MudText Typo="Typo.body2">@_trialBalance.AsOf.Value.ToString("MMM d, yyyy h:mm tt")</MudText>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+        else if (!_loading)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">No trial balance data available.</MudText>
+        }
+    </MudCardContent>
+</MudCard>
+
+@* Journal Entries (empty state for Phase 1) *@
+<MudText Typo="Typo.h6" Class="mb-3" Style="font-weight:600">Journal Entries</MudText>
+
+<MudDataGrid T="JournalEntryLineDto" Items="@_lines" Elevation="2" Dense="false" Hover="true">
+    <Columns>
+        <PropertyColumn Property="x => x.AccountId" Title="Account" />
+        <TemplateColumn Title="Debit">
+            <CellTemplate>
+                @if (context.Item.DebitAmount > 0)
+                {
+                    <MudText Style="color:var(--ol-primary); font-weight:600">
+                        @context.Item.DebitAmount.ToString("C2")
+                    </MudText>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Credit">
+            <CellTemplate>
+                @if (context.Item.CreditAmount > 0)
+                {
+                    <MudText Color="Color.Secondary" Style="font-weight:600">
+                        @context.Item.CreditAmount.ToString("C2")
+                    </MudText>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="x => x.BookTag" Title="Book Tag" />
+    </Columns>
+    <NoRecordsContent>
+        <MudAlert Severity="Severity.Info" Dense="true">
+            No journal entries yet. Post your first entry to see it here.
+        </MudAlert>
+    </NoRecordsContent>
+</MudDataGrid>
+
+@code {
+    private bool _loading = true;
+    private TrialBalanceDto? _trialBalance;
+    private List<JournalEntryLineDto> _lines = [];
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _trialBalance = await Finance.GetTrialBalanceAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

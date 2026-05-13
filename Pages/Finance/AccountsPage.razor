@@ -1,0 +1,70 @@
+@page "/finance/accounts"
+@inject FinanceWebService Finance
+
+<MudText Typo="Typo.h4" Class="mb-6" Style="font-weight:700">Chart of Accounts</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">@_error</MudAlert>
+}
+
+<MudDataGrid T="AccountDto" Items="@_accounts" Filterable="true"
+             Elevation="2" Dense="false" Hover="true">
+    <Columns>
+        <PropertyColumn Property="x => x.AccountType" Title="Type" />
+        <PropertyColumn Property="x => x.AccountNumber" Title="Account #" />
+        <PropertyColumn Property="x => x.DisplayName" Title="Name" />
+        <TemplateColumn Title="Balance">
+            <CellTemplate>
+                <MudText>@context.Item.Balance.ToString("C2")</MudText>
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Posting">
+            <CellTemplate>
+                @if (context.Item.IsPosting)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Default">Non-posting</MudChip>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="COGS">
+            <CellTemplate>
+                @if (context.Item.CogsIntent)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Primary" Size="Size.Small" />
+                }
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+</MudDataGrid>
+
+@code {
+    private bool _loading = true;
+    private List<AccountDto> _accounts = [];
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _accounts = await Finance.GetAccountsAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}
