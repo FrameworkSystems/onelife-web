@@ -48,4 +48,43 @@ public sealed class FinanceWebService
         using var doc = await JsonDocument.ParseAsync(await resp.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
         return doc.RootElement.TryGetProperty("entryId", out var id) ? id.GetString() : null;
     }
+
+    public async Task<List<EnvelopeDto>> GetEnvelopesAsync(CancellationToken ct = default)
+    {
+        var result = await _http.GetFromJsonAsync<List<EnvelopeDto>>(
+            $"/api/finance/envelopes?userId={Uri.EscapeDataString(UserId)}", ct);
+        return result ?? [];
+    }
+
+    public async Task<EnvelopeDto?> CreateEnvelopeAsync(CreateEnvelopeRequest req, CancellationToken ct = default)
+    {
+        var resp = await _http.PostAsJsonAsync("/api/finance/envelopes", req, ct);
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadFromJsonAsync<EnvelopeDto>(cancellationToken: ct);
+    }
+
+    public async Task<BucketBalanceDto?> GetEnvelopeBalanceAsync(string envelopeId, CancellationToken ct = default)
+    {
+        return await _http.GetFromJsonAsync<BucketBalanceDto>(
+            $"/api/finance/envelopes/{Uri.EscapeDataString(envelopeId)}/balance?userId={Uri.EscapeDataString(UserId)}", ct);
+    }
+
+    public async Task LearnBookTagAsync(string merchantName, string confirmedBookTag, CancellationToken ct = default)
+    {
+        var req = new { merchantName, confirmedBookTag };
+        var resp = await _http.PostAsJsonAsync(
+            $"/api/finance/booktag/learn?userId={Uri.EscapeDataString(UserId)}", req, ct);
+        resp.EnsureSuccessStatusCode();
+    }
+
+    public async Task<string?> SuggestBookTagAsync(string merchantName, CancellationToken ct = default)
+    {
+        try
+        {
+            var result = await _http.GetFromJsonAsync<Dictionary<string, string>>(
+                $"/api/finance/booktag/suggest?userId={Uri.EscapeDataString(UserId)}&merchantName={Uri.EscapeDataString(merchantName)}", ct);
+            return result?.GetValueOrDefault("suggestedBookTag");
+        }
+        catch { return null; }
+    }
 }

@@ -1,0 +1,207 @@
+@page "/finance/envelopes"
+@using OneLife.Web.Components.Finance
+@inject FinanceWebService Finance
+
+<MudText Typo="Typo.h4" Class="mb-2" Style="font-weight:700">Envelopes</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+    Budget envelopes with Personal / Business / Mixed BookTag classification.
+</MudText>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4" ShowCloseIcon="true"
+              CloseIconClicked="@(() => _error = null)">@_error</MudAlert>
+}
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add"
+               OnClick="@(() => { _newEnvelope = new(); _showCreateDialog = true; })">
+        New Envelope
+    </MudButton>
+</MudStack>
+
+@if (_loading)
+{
+    <MudGrid Spacing="3">
+        @for (var i = 0; i < 3; i++)
+        {
+            <MudItem xs="12" sm="6" lg="4">
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="160px" />
+            </MudItem>
+        }
+    </MudGrid>
+}
+else if (_envelopes.Count == 0)
+{
+    <MudPaper Elevation="0" Class="pa-8 d-flex flex-column align-center">
+        <MudIcon Icon="@Icons.Material.Filled.Inbox" Size="Size.Large" Color="Color.Default" Class="mb-4" />
+        <MudText Typo="Typo.h6" Class="mb-2">No envelopes yet</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+            Create an envelope to start tracking spending by category or BookTag.
+        </MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="@(() => { _newEnvelope = new(); _showCreateDialog = true; })">
+            Create Envelope
+        </MudButton>
+    </MudPaper>
+}
+else
+{
+    <MudGrid Spacing="3">
+        @foreach (var env in _envelopes)
+        {
+            var balance = _balances.GetValueOrDefault(env.Id);
+            <MudItem xs="12" sm="6" lg="4">
+                <MudCard Elevation="2" Style="height:100%">
+                    <MudCardHeader>
+                        <CardHeaderAvatar>
+                            <BucketBalanceChart Budget="@env.BudgetAmount"
+                                               Balance="@(balance?.Balance ?? env.BudgetAmount)" />
+                        </CardHeaderAvatar>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">@env.Name</MudText>
+                            <MudChip T="string" Size="Size.Small" Color="@BookTagColor(env.BookTag)"
+                                     Variant="Variant.Filled" Class="mt-1">
+                                @env.BookTag
+                            </MudChip>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        @if (balance is null)
+                        {
+                            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+                        }
+                        else
+                        {
+                            <MudStack Spacing="1">
+                                <MudText Typo="Typo.body2">
+                                    <strong>Balance:</strong> @balance.Balance.ToString("C")
+                                </MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    Budget: @env.BudgetAmount.ToString("C")
+                                </MudText>
+                                @if (env.RefillRule is not null)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        Refill: @env.RefillRule
+                                    </MudText>
+                                }
+                            </MudStack>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@* Create envelope dialog *@
+<MudDialog @bind-Visible="_showCreateDialog" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">New Envelope</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_newEnvelope.Name" Label="Name" Required="true"
+                      Class="mb-3" Variant="Variant.Outlined" />
+
+        <MudText Typo="Typo.body2" Class="mb-1">BookTag</MudText>
+        <BookTagPickerComponent @bind-SelectedValue="_newEnvelope.BookTag" />
+
+        <MudNumericField T="decimal" @bind-Value="_newEnvelope.BudgetAmount"
+                         Label="Budget Amount" Class="mt-3 mb-3"
+                         Variant="Variant.Outlined" Adornment="Adornment.Start"
+                         AdornmentText="$" Min="0" />
+
+        <MudSelect T="string" @bind-Value="_newEnvelope.RefillRule" Label="Refill" Class="mb-3"
+                   Variant="Variant.Outlined">
+            <MudSelectItem T="string" Value="@((string?)null)">None</MudSelectItem>
+            <MudSelectItem T="string" Value="@("Monthly")">Monthly</MudSelectItem>
+            <MudSelectItem T="string" Value="@("Weekly")">Weekly</MudSelectItem>
+        </MudSelect>
+
+        @if (_newEnvelope.RefillRule is not null)
+        {
+            <MudSelect T="string" @bind-Value="_newEnvelope.RolloverPolicy" Label="Rollover" Class="mb-3"
+                       Variant="Variant.Outlined">
+                <MudSelectItem T="string" Value="@("rollover")">Roll over</MudSelectItem>
+                <MudSelectItem T="string" Value="@("reset")">Reset to zero</MudSelectItem>
+            </MudSelect>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _showCreateDialog = false)">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   OnClick="CreateEnvelopeAsync"
+                   Disabled="@(!IsFormValid || _saving)">
+            @(_saving ? "Saving…" : "Save")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<EnvelopeDto> _envelopes = [];
+    private Dictionary<string, BucketBalanceDto> _balances = [];
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+    private bool _showCreateDialog;
+    private CreateEnvelopeRequest _newEnvelope = new();
+
+    private DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+    private bool IsFormValid =>
+        !string.IsNullOrWhiteSpace(_newEnvelope.Name) && _newEnvelope.BudgetAmount > 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEnvelopesAsync();
+    }
+
+    private async Task LoadEnvelopesAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _envelopes = await Finance.GetEnvelopesAsync();
+            var tasks = _envelopes.Select(e => FetchBalanceAsync(e.Id));
+            await Task.WhenAll(tasks);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task FetchBalanceAsync(string envelopeId)
+    {
+        var bal = await Finance.GetEnvelopeBalanceAsync(envelopeId);
+        if (bal is not null)
+        {
+            _balances[envelopeId] = bal;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CreateEnvelopeAsync()
+    {
+        _saving = true;
+        try
+        {
+            var created = await Finance.CreateEnvelopeAsync(_newEnvelope);
+            if (created is not null) _envelopes.Add(created);
+            _showCreateDialog = false;
+            _newEnvelope = new();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _saving = false; }
+    }
+
+    private static Color BookTagColor(string bookTag) => bookTag switch
+    {
+        "Personal" => Color.Success,
+        "Business" => Color.Info,
+        _ => Color.Warning,
+    };
+}

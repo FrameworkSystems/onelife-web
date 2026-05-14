@@ -1,0 +1,22 @@
+@* BookTag chip row — @bind-SelectedValue<string>, Personal/Business/Mixed *@
+
+<MudChipSet T="string" SelectionMode="SelectionMode.SingleSelection"
+            @bind-SelectedValue="SelectedValue">
+    <MudChip T="string" Value="@("Personal")" Color="Color.Success" Variant="@ChipVariant("Personal")">
+        Personal
+    </MudChip>
+    <MudChip T="string" Value="@("Business")" Color="Color.Info" Variant="@ChipVariant("Business")">
+        Business
+    </MudChip>
+    <MudChip T="string" Value="@("Mixed")" Color="Color.Warning" Variant="@ChipVariant("Mixed")">
+        Mixed
+    </MudChip>
+</MudChipSet>
+
+@code {
+    [Parameter] public string SelectedValue { get; set; } = "Personal";
+    [Parameter] public EventCallback<string> SelectedValueChanged { get; set; }
+
+    private Variant ChipVariant(string tag) =>
+        SelectedValue == tag ? Variant.Filled : Variant.Outlined;
+}

@@ -1,0 +1,39 @@
+@* 80×80 donut ring showing envelope spend fraction *@
+
+<div style="width:80px;height:80px;position:relative">
+    <MudChart ChartType="ChartType.Donut"
+              InputData="@_data"
+              InputLabels="@_labels"
+              Width="80px" Height="80px"
+              ChartOptions="@_chartOptions" />
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;line-height:1.1">
+        <MudText Typo="Typo.caption" Style="font-weight:700;font-size:10px">
+            @_pct%
+        </MudText>
+    </div>
+</div>
+
+@code {
+    [Parameter] public decimal Budget { get; set; }
+    [Parameter] public decimal Balance { get; set; }
+
+    private double[] _data = [0, 1];
+    private string[] _labels = ["Used", "Remaining"];
+    private int _pct;
+    private readonly ChartOptions _chartOptions = new() { ShowLegend = false };
+
+    protected override void OnParametersSet()
+    {
+        if (Budget <= 0)
+        {
+            _data = [0, 1];
+            _pct = 0;
+            return;
+        }
+        var spent = Math.Max(0, (double)(Budget - Balance));
+        var remaining = Math.Max(0, (double)Balance);
+        var fraction = spent / (double)Budget;
+        _pct = (int)Math.Min(fraction * 100, 100);
+        _data = [spent, remaining > 0 ? remaining : 0.001];
+    }
+}
