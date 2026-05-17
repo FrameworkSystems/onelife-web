@@ -1,0 +1,74 @@
+@using OneLife.Web.Models.Finance.BankConnect
+@inject FinanceWebService Finance
+
+<MudDialog @bind-Visible="IsVisible">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Confirm Mixed Split</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-4" Color="Color.Secondary">
+            This transaction appears to be from a mixed merchant (e.g. Costco). Allocate the personal vs. business portion.
+        </MudText>
+        @if (Record is not null)
+        {
+            <MudText Typo="Typo.subtitle2">@Record.MerchantName — @Record.Amount.ToString("C")</MudText>
+        }
+        <MudText Typo="Typo.body2" Class="mt-4 mb-1">
+            Personal: @((int)(_personalPct * 100))% · Business: @((int)((1 - _personalPct) * 100))%
+        </MudText>
+        <MudSlider @bind-Value="_personalPct" Min="0" Max="1" Step="0.05" Color="Color.Warning" />
+        @if (Record is not null)
+        {
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Personal: @((Record.Amount * (decimal)_personalPct).ToString("C")) · Business: @((Record.Amount * (decimal)(1 - _personalPct)).ToString("C"))
+            </MudText>
+        }
+        <MudTextField @bind-Value="_bookTag" Label="Book Tag" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => IsVisible = false)">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Confirm" Disabled="_submitting">
+            @(_submitting ? "Saving…" : "Confirm Split")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback<bool> IsVisibleChanged { get; set; }
+    [Parameter] public ReconciliationDto? Record { get; set; }
+    [Parameter] public EventCallback<ReconciliationDto> OnResolved { get; set; }
+
+    private double _personalPct = 0.5;
+    private string _bookTag = string.Empty;
+    private bool _submitting;
+
+    protected override void OnParametersSet()
+    {
+        _bookTag = Record?.ConfirmedBookTag ?? string.Empty;
+    }
+
+    private async Task Confirm()
+    {
+        if (Record is null) return;
+        _submitting = true;
+        try
+        {
+            var req = new ConfirmMatchRequest
+            {
+                ConfirmedBookTag = string.IsNullOrWhiteSpace(_bookTag) ? null : _bookTag,
+                Action = "split",
+                PersonalPct = (decimal)_personalPct
+            };
+            var result = await Finance.ConfirmMatchAsync(Record.Id, req);
+            if (result is not null)
+            {
+                await OnResolved.InvokeAsync(result);
+                IsVisible = false;
+                await IsVisibleChanged.InvokeAsync(false);
+            }
+        }
+        catch { }
+        finally { _submitting = false; }
+    }
+}

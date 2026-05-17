@@ -1,0 +1,115 @@
+@using OneLife.Web.Models.Finance.BankConnect
+@inject FinanceWebService Finance
+
+<MudPaper Elevation="2" Class="pa-4 mb-3">
+    <MudGrid>
+        <MudItem xs="12" sm="6">
+            <MudText Typo="Typo.subtitle1" Style="font-weight:600">@Record.MerchantName</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                @Record.TransactionDate.ToString("MMM d, yyyy") · @Record.Amount.ToString("C")
+            </MudText>
+            @if (Record.PlaidCategory is not null)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@Record.PlaidCategory</MudText>
+            }
+        </MudItem>
+        <MudItem xs="12" sm="3">
+            <MudChip T="string" Size="Size.Small" Color="@ConfidenceColor(Record.Confidence ?? 0)">
+                @(Record.Confidence.HasValue ? $"{(int)(Record.Confidence.Value * 100)}% confidence" : "No match")
+            </MudChip>
+            @if (Record.RequiresSplitConfirmation)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-1">Split</MudChip>
+            }
+        </MudItem>
+        <MudItem xs="12" sm="3" Class="d-flex gap-2 align-center justify-end">
+            @if (!_expanded)
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => _expanded = true)">Review</MudButton>
+                <MudButton Size="Size.Small" Color="Color.Error" OnClick="Dismiss">Dismiss</MudButton>
+            }
+        </MudItem>
+    </MudGrid>
+
+    @if (_expanded)
+    {
+        <MudDivider Class="my-3" />
+        <MudGrid>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_bookTag" Label="Book Tag" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect @bind-Value="_action" Label="Action" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    <MudSelectItem Value="@("merge")">Merge</MudSelectItem>
+                    <MudSelectItem Value="@("split")">Split (Business/Personal)</MudSelectItem>
+                    <MudSelectItem Value="@("dismiss")">Dismiss</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            @if (_action == "split" || Record.RequiresSplitConfirmation)
+            {
+                <MudItem xs="12">
+                    <MudText Typo="Typo.body2">Personal: @((int)(_personalPct * 100))% · Business: @((int)((1 - _personalPct) * 100))%</MudText>
+                    <MudSlider @bind-Value="_personalPct" Min="0" Max="1" Step="0.05" Color="Color.Warning" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Personal: @((Record.Amount * (decimal)_personalPct).ToString("C")) · Business: @((Record.Amount * (decimal)(1 - _personalPct)).ToString("C"))
+                    </MudText>
+                </MudItem>
+            }
+            <MudItem xs="12" Class="d-flex gap-2 justify-end">
+                <MudButton OnClick="@(() => _expanded = false)">Cancel</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Confirm" Disabled="_submitting">
+                    @(_submitting ? "Saving…" : "Confirm")
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public ReconciliationDto Record { get; set; } = null!;
+    [Parameter] public EventCallback<ReconciliationDto> OnResolved { get; set; }
+
+    private bool _expanded;
+    private bool _submitting;
+    private string _bookTag = string.Empty;
+    private string _action = "merge";
+    private double _personalPct = 0.5;
+
+    protected override void OnParametersSet()
+    {
+        _bookTag = Record.ConfirmedBookTag ?? string.Empty;
+        _action = Record.RequiresSplitConfirmation ? "split" : "merge";
+    }
+
+    private async Task Confirm()
+    {
+        _submitting = true;
+        try
+        {
+            var req = new ConfirmMatchRequest
+            {
+                ConfirmedBookTag = string.IsNullOrWhiteSpace(_bookTag) ? null : _bookTag,
+                Action = _action,
+                PersonalPct = _action == "split" ? (decimal)_personalPct : null
+            };
+            var result = await Finance.ConfirmMatchAsync(Record.Id, req);
+            if (result is not null) await OnResolved.InvokeAsync(result);
+        }
+        catch { }
+        finally { _submitting = false; }
+    }
+
+    private async Task Dismiss()
+    {
+        var req = new ConfirmMatchRequest { Action = "dismiss" };
+        var result = await Finance.ConfirmMatchAsync(Record.Id, req);
+        if (result is not null) await OnResolved.InvokeAsync(result);
+    }
+
+    private static Color ConfidenceColor(double confidence) => confidence switch
+    {
+        >= 0.85 => Color.Success,
+        >= 0.55 => Color.Warning,
+        _ => Color.Error
+    };
+}

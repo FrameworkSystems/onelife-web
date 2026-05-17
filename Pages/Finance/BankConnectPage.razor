@@ -1,0 +1,153 @@
+@page "/finance/bank-connect"
+@using OneLife.Web.Models.Finance.BankConnect
+@inject FinanceWebService Finance
+@inject IJSRuntime JS
+@implements IDisposable
+
+<MudText Typo="Typo.h4" Class="mb-2" Style="font-weight:700">Connected Banks</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+    Link bank accounts to automatically import and reconcile transactions.
+</MudText>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4" ShowCloseIcon="true"
+              CloseIconClicked="@(() => _error = null)">@_error</MudAlert>
+}
+
+<MudPaper Elevation="0" Class="mb-4 d-flex justify-end">
+    <MudButton Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.AccountBalance"
+               OnClick="OpenPlaidLink" Disabled="_linking">
+        @(_linking ? "Connecting…" : "Link Bank Account")
+    </MudButton>
+</MudPaper>
+
+@if (_loading)
+{
+    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="200px" />
+}
+else if (_connections.Count == 0)
+{
+    <MudPaper Class="pa-8 d-flex flex-column align-center" Elevation="1">
+        <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Size="Size.Large" Color="Color.Secondary" Class="mb-2" />
+        <MudText Typo="Typo.h6">No banks connected</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Link an account to start importing transactions.</MudText>
+    </MudPaper>
+}
+else
+{
+    <MudDataGrid T="PlaidConnectionDto" Items="_connections" Dense="true" Hover="true" Elevation="1" Class="mb-4">
+        <Columns>
+            <PropertyColumn Property="x => x.InstitutionName" Title="Bank" />
+            <PropertyColumn Property="x => x.Status" Title="Status">
+                <CellTemplate>
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@(context.Item.Status == "Active" ? Color.Success : Color.Warning)">
+                        @context.Item.Status
+                    </MudChip>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.LastSync" Title="Last Sync">
+                <CellTemplate>
+                    @(context.Item.LastSync.HasValue ? context.Item.LastSync.Value.ToString("MMM d, yyyy h:mm tt") : "—")
+                </CellTemplate>
+            </PropertyColumn>
+            <TemplateColumn Title="Actions">
+                <CellTemplate>
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small"
+                                   OnClick="@(() => ConfirmDelete(context.Item))" />
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+    </MudDataGrid>
+}
+
+<MudDialog @bind-Visible="_deleteDialogOpen">
+    <TitleContent><MudText Typo="Typo.h6">Remove Connection</MudText></TitleContent>
+    <DialogContent>
+        <MudText>Disconnect <strong>@_deleteTarget?.InstitutionName</strong>? Existing transactions are not removed.</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _deleteDialogOpen = false)">Cancel</MudButton>
+        <MudButton Color="Color.Error" OnClick="DeleteConnection">Remove</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<PlaidConnectionDto> _connections = [];
+    private bool _loading = true;
+    private bool _linking;
+    private string? _error;
+    private bool _deleteDialogOpen;
+    private PlaidConnectionDto? _deleteTarget;
+    private DotNetObjectReference<BankConnectPage>? _dotNetRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _dotNetRef = DotNetObjectReference.Create(this);
+        await LoadConnections();
+    }
+
+    private async Task LoadConnections()
+    {
+        _loading = true;
+        try { _connections = await Finance.GetConnectionsAsync(); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task OpenPlaidLink()
+    {
+        _linking = true;
+        try
+        {
+            var token = await Finance.GetLinkTokenAsync();
+            if (!string.IsNullOrEmpty(token))
+                await JS.InvokeVoidAsync("plaidInterop.open", token, _dotNetRef);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _linking = false; }
+    }
+
+    [JSInvokable]
+    public async Task OnPlaidSuccess(string publicToken, string institutionId, string institutionName)
+    {
+        try
+        {
+            var req = new ExchangeTokenRequest
+            {
+                PublicToken = publicToken,
+                InstitutionId = institutionId,
+                InstitutionName = institutionName
+            };
+            var conn = await Finance.ExchangeTokenAsync(req);
+            if (conn is not null) _connections.Insert(0, conn);
+            StateHasChanged();
+        }
+        catch (Exception ex) { _error = ex.Message; StateHasChanged(); }
+    }
+
+    [JSInvokable]
+    public void OnPlaidExit() { }
+
+    private void ConfirmDelete(PlaidConnectionDto connection)
+    {
+        _deleteTarget = connection;
+        _deleteDialogOpen = true;
+    }
+
+    private async Task DeleteConnection()
+    {
+        _deleteDialogOpen = false;
+        if (_deleteTarget is null) return;
+        try
+        {
+            await Finance.DeleteConnectionAsync(_deleteTarget.Id);
+            _connections.Remove(_deleteTarget);
+            _deleteTarget = null;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    public void Dispose() => _dotNetRef?.Dispose();
+}

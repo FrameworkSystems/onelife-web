@@ -1,0 +1,140 @@
+@page "/finance/transactions"
+@using OneLife.Web.Models.Finance.BankConnect
+@using OneLife.Web.Components.Finance
+@inject FinanceWebService Finance
+
+<MudText Typo="Typo.h4" Class="mb-2" Style="font-weight:700">Transactions</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+    Imported bank transactions with reconciliation status.
+</MudText>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4" ShowCloseIcon="true"
+              CloseIconClicked="@(() => _error = null)">@_error</MudAlert>
+}
+
+<MudPaper Elevation="0" Class="mb-4 d-flex gap-3 flex-wrap align-center">
+    <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+        <MudButton OnClick="@(() => SetBookTagFilter(null))"
+                   Color="@(_bookTagFilter is null ? Color.Primary : Color.Default)">All</MudButton>
+        <MudButton OnClick="@(() => SetBookTagFilter("Personal"))"
+                   Color="@(_bookTagFilter == "Personal" ? Color.Primary : Color.Default)">Personal</MudButton>
+        <MudButton OnClick="@(() => SetBookTagFilter("Business"))"
+                   Color="@(_bookTagFilter == "Business" ? Color.Primary : Color.Default)">Business</MudButton>
+    </MudButtonGroup>
+    <MudDateRangePicker @bind-DateRange="_dateRange" Label="Date range" Variant="Variant.Outlined" Margin="Margin.Dense" />
+    <MudButton Variant="Variant.Outlined" OnClick="LoadTransactions">Filter</MudButton>
+    <MudSpacer />
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Align="Align.Right">
+        @_transactions.Count transactions
+    </MudText>
+</MudPaper>
+
+@if (_pending.Count > 0)
+{
+    <MudText Typo="Typo.h6" Class="mb-2">Pending Review (@_pending.Count)</MudText>
+    @foreach (var record in _pending)
+    {
+        <ReconciliationRow Record="record" OnResolved="OnRecordResolved" />
+    }
+    <MudDivider Class="mb-4" />
+}
+
+@if (_loading)
+{
+    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="300px" />
+}
+else if (_transactions.Count == 0)
+{
+    <MudPaper Class="pa-8 d-flex flex-column align-center" Elevation="1">
+        <MudIcon Icon="@Icons.Material.Filled.Receipt" Size="Size.Large" Color="Color.Secondary" Class="mb-2" />
+        <MudText Typo="Typo.h6">No transactions</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Link a bank account to start importing transactions.</MudText>
+    </MudPaper>
+}
+else
+{
+    <MudDataGrid T="TransactionDto" Items="_transactions" Dense="true" Hover="true" Elevation="1">
+        <Columns>
+            <PropertyColumn Property="x => x.PostedAt" Title="Date">
+                <CellTemplate>@context.Item.PostedAt.ToString("MMM d, yyyy")</CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.Description" Title="Description" />
+            <PropertyColumn Property="x => x.MerchantName" Title="Merchant" />
+            <PropertyColumn Property="x => x.Amount" Title="Amount">
+                <CellTemplate>
+                    <MudText Style="font-weight:600">@context.Item.Amount.ToString("C")</MudText>
+                </CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.BookTag" Title="Book Tag">
+                <CellTemplate>@(context.Item.BookTag ?? "—")</CellTemplate>
+            </PropertyColumn>
+            <PropertyColumn Property="x => x.ReconciliationStatus" Title="Status">
+                <CellTemplate>
+                    @if (context.Item.ReconciliationStatus is not null)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="@StatusColor(context.Item.ReconciliationStatus)">
+                            @context.Item.ReconciliationStatus
+                        </MudChip>
+                    }
+                </CellTemplate>
+            </PropertyColumn>
+        </Columns>
+    </MudDataGrid>
+}
+
+@code {
+    private List<TransactionDto> _transactions = [];
+    private List<ReconciliationDto> _pending = [];
+    private bool _loading = true;
+    private string? _error;
+    private string? _bookTagFilter;
+    private DateRange _dateRange = new(DateTimeOffset.UtcNow.AddMonths(-1).DateTime, DateTimeOffset.UtcNow.DateTime);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(LoadTransactions(), LoadPending());
+    }
+
+    private async Task LoadTransactions()
+    {
+        _loading = true;
+        try
+        {
+            _transactions = await Finance.GetTransactionsAsync(
+                bookTag: _bookTagFilter,
+                from: _dateRange.Start.HasValue ? new DateTimeOffset(_dateRange.Start.Value) : null,
+                to: _dateRange.End.HasValue ? new DateTimeOffset(_dateRange.End.Value) : null);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task LoadPending()
+    {
+        try { _pending = await Finance.GetPendingMatchesAsync(); }
+        catch { /* non-blocking */ }
+    }
+
+    private void SetBookTagFilter(string? tag)
+    {
+        _bookTagFilter = tag;
+        _ = LoadTransactions();
+    }
+
+    private void OnRecordResolved(ReconciliationDto resolved)
+    {
+        _pending.RemoveAll(r => r.Id == resolved.Id);
+        StateHasChanged();
+    }
+
+    private static Color StatusColor(string status) => status switch
+    {
+        "AutoMerged" => Color.Success,
+        "UserConfirmed" => Color.Success,
+        "Dismissed" => Color.Default,
+        "UserOverridden" => Color.Warning,
+        _ => Color.Warning
+    };
+}

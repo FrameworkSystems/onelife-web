@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using OneLife.Web.Models.Finance;
 using OneLife.Web.Models.Finance.Assets;
+using OneLife.Web.Models.Finance.BankConnect;
 using OneLife.Web.Models.Finance.Business;
 
 namespace OneLife.Web.Services;
@@ -184,5 +185,61 @@ public sealed class FinanceWebService
         var path = $"/api/finance/net-worth?userId={Uri.EscapeDataString(UserId)}";
         if (bookTag is not null) path += $"&bookTag={Uri.EscapeDataString(bookTag)}";
         return await _http.GetFromJsonAsync<NetWorthDto>(path, ct);
+    }
+
+    // Bank Connect
+
+    public async Task<string?> GetLinkTokenAsync(CancellationToken ct = default)
+    {
+        var result = await _http.GetFromJsonAsync<Dictionary<string, string>>(
+            $"/api/finance/bank-connect/link-token?userId={Uri.EscapeDataString(UserId)}", ct);
+        return result?.GetValueOrDefault("linkToken");
+    }
+
+    public async Task<PlaidConnectionDto?> ExchangeTokenAsync(ExchangeTokenRequest req, CancellationToken ct = default)
+    {
+        req.UserId = UserId;
+        var resp = await _http.PostAsJsonAsync("/api/finance/bank-connect/exchange-token", req, ct);
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadFromJsonAsync<PlaidConnectionDto>(cancellationToken: ct);
+    }
+
+    public async Task<List<PlaidConnectionDto>> GetConnectionsAsync(CancellationToken ct = default)
+    {
+        var result = await _http.GetFromJsonAsync<List<PlaidConnectionDto>>(
+            $"/api/finance/bank-connect/connections?userId={Uri.EscapeDataString(UserId)}", ct);
+        return result ?? [];
+    }
+
+    public async Task DeleteConnectionAsync(string connectionId, CancellationToken ct = default)
+    {
+        var resp = await _http.DeleteAsync(
+            $"/api/finance/bank-connect/connections/{Uri.EscapeDataString(connectionId)}?userId={Uri.EscapeDataString(UserId)}", ct);
+        resp.EnsureSuccessStatusCode();
+    }
+
+    public async Task<List<ReconciliationDto>> GetPendingMatchesAsync(CancellationToken ct = default)
+    {
+        var result = await _http.GetFromJsonAsync<List<ReconciliationDto>>(
+            $"/api/finance/reconciliation/pending?userId={Uri.EscapeDataString(UserId)}", ct);
+        return result ?? [];
+    }
+
+    public async Task<ReconciliationDto?> ConfirmMatchAsync(string recordId, ConfirmMatchRequest req, CancellationToken ct = default)
+    {
+        req.UserId = UserId;
+        var resp = await _http.PostAsJsonAsync($"/api/finance/reconciliation/{Uri.EscapeDataString(recordId)}/confirm", req, ct);
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadFromJsonAsync<ReconciliationDto>(cancellationToken: ct);
+    }
+
+    public async Task<List<TransactionDto>> GetTransactionsAsync(string? bookTag = null, DateTimeOffset? from = null, DateTimeOffset? to = null, CancellationToken ct = default)
+    {
+        var path = $"/api/finance/transactions?userId={Uri.EscapeDataString(UserId)}";
+        if (bookTag is not null) path += $"&bookTag={Uri.EscapeDataString(bookTag)}";
+        if (from.HasValue) path += $"&from={Uri.EscapeDataString(from.Value.ToString("o"))}";
+        if (to.HasValue) path += $"&to={Uri.EscapeDataString(to.Value.ToString("o"))}";
+        var result = await _http.GetFromJsonAsync<List<TransactionDto>>(path, ct);
+        return result ?? [];
     }
 }

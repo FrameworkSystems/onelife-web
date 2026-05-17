@@ -32,6 +32,25 @@
     </div>
     <script src="_framework/blazor.webassembly.js"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+    <script>
+        window.plaidInterop = {
+            open: function (linkToken, dotNetRef) {
+                var handler = Plaid.create({
+                    token: linkToken,
+                    onSuccess: function (publicToken, metadata) {
+                        dotNetRef.invokeMethodAsync('OnPlaidSuccess', publicToken,
+                            metadata.institution ? metadata.institution.institution_id : '',
+                            metadata.institution ? metadata.institution.name : '');
+                    },
+                    onExit: function (err, metadata) {
+                        dotNetRef.invokeMethodAsync('OnPlaidExit');
+                    }
+                });
+                handler.open();
+            }
+        };
+    </script>
 </body>
 
 </html>
