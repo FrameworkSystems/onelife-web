@@ -1,0 +1,84 @@
+@page "/finance/agents/{AgentName}"
+@using OneLife.Web.Models.Finance.Agents
+@using System.Globalization
+@inject FinanceWebService Finance
+
+<MudText Typo="Typo.h4" Class="mb-1" Style="font-weight:700">@AgentLabel</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">Ask me anything about your finances.</MudText>
+
+<MudPaper Elevation="2" Class="pa-4 mb-4" Style="max-height:500px;overflow-y:auto" @ref="_chatContainer">
+    @foreach (var msg in _messages)
+    {
+        <MudStack Row="true" Justify="@(msg.IsUser ? Justify.FlexEnd : Justify.FlexStart)" Class="mb-3">
+            <MudPaper Elevation="0" Class="pa-3"
+                      Style="@($"max-width:75%;background-color:{(msg.IsUser ? "var(--mud-palette-primary)" : "var(--mud-palette-surface)")};color:{(msg.IsUser ? "white" : "inherit")};border-radius:12px")">
+                <MudText Typo="Typo.body2">@msg.Text</MudText>
+                @if (!string.IsNullOrEmpty(msg.Disclaimer))
+                {
+                    <MudDivider Class="my-2" />
+                    <MudText Typo="Typo.caption" Color="Color.Warning">@msg.Disclaimer</MudText>
+                }
+            </MudPaper>
+        </MudStack>
+    }
+    @if (_querying)
+    {
+        <MudStack Row="true" Justify="Justify.FlexStart" Class="mb-3">
+            <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Primary" />
+        </MudStack>
+    }
+</MudPaper>
+
+<MudStack Row="true" Spacing="2">
+    <MudTextField @bind-Value="_inputText" Placeholder="Type your question…"
+                  Variant="Variant.Outlined" Adornment="Adornment.End"
+                  Lines="1" FullWidth="true"
+                  OnKeyDown="@HandleKeyDown" Disabled="@_querying" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               OnClick="@SendQuery" Disabled="@(string.IsNullOrWhiteSpace(_inputText) || _querying)">
+        Send
+    </MudButton>
+</MudStack>
+
+@code {
+    [Parameter] public string AgentName { get; set; } = string.Empty;
+
+    private string AgentLabel => CultureInfo.CurrentCulture.TextInfo.ToTitleCase(AgentName.Replace("-", " "));
+    private List<ChatMessage> _messages = [];
+    private string _inputText = string.Empty;
+    private bool _querying;
+    private MudPaper? _chatContainer;
+
+    private record ChatMessage(bool IsUser, string Text, string? Disclaimer = null);
+
+    private async Task SendQuery()
+    {
+        var trimmed = _inputText.Trim();
+        if (string.IsNullOrEmpty(trimmed)) return;
+
+        _messages.Add(new ChatMessage(IsUser: true, Text: trimmed));
+        _inputText = string.Empty;
+        _querying = true;
+
+        try
+        {
+            var response = await Finance.QueryAgentAsync(AgentName, trimmed);
+            _messages.Add(new ChatMessage(IsUser: false, Text: response?.Answer ?? "No response.", Disclaimer: response?.Disclaimer));
+        }
+        catch
+        {
+            _messages.Add(new ChatMessage(IsUser: false, Text: "I'm unavailable right now. Please try again."));
+        }
+        finally
+        {
+            _querying = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+            await SendQuery();
+    }
+}

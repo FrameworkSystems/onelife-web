@@ -1,0 +1,91 @@
+@page "/finance/vault"
+@using OneLife.Web.Models.Finance.Vault
+@inject FinanceWebService Finance
+
+<MudText Typo="Typo.h4" Class="mb-2" Style="font-weight:700">Vault Access</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+    Control which modules can access your financial data across OneLife.
+</MudText>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4" ShowCloseIcon="true"
+              CloseIconClicked="@(() => _error = null)">@_error</MudAlert>
+}
+
+@if (_consent is not null)
+{
+    <MudPaper Elevation="2" Class="pa-4 mb-6">
+        <MudText Typo="Typo.h6" Class="mb-3">Data Access Scopes</MudText>
+        <MudSwitch T="bool" Value="@IsGranted(PersonalScope)"
+                   ValueChanged="@(v => SetScope(PersonalScope, v))"
+                   Color="Color.Primary" Label="Finance:Personal — Health + Lifestyle modules" />
+        <MudSwitch T="bool" Value="@IsGranted(BusinessScope)"
+                   ValueChanged="@(v => SetScope(BusinessScope, v))"
+                   Color="Color.Primary" Label="Finance:Business — Business module access" />
+    </MudPaper>
+}
+
+<MudText Typo="Typo.h6" Class="mb-3">Audit Log</MudText>
+@if (_auditEvents.Count == 0 && !_loading)
+{
+    <MudText Color="Color.Secondary">No audit events yet.</MudText>
+}
+else
+{
+    <MudDataGrid T="VaultAuditEvent" Items="@_auditEvents" Dense="true" Striped="true"
+                 Elevation="1" Class="mb-4">
+        <Columns>
+            <PropertyColumn Property="@(e => e.OperationType)" Title="Operation" />
+            <PropertyColumn Property="@(e => e.EntryId)" Title="Entry ID" />
+            <TemplateColumn Title="Occurred At">
+                <CellTemplate>
+                    @context.Item.OccurredAt.LocalDateTime.ToString("g")
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+    </MudDataGrid>
+}
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-2" />
+}
+
+@code {
+    private const string PersonalScope = "Finance:Personal";
+    private const string BusinessScope = "Finance:Business";
+
+    private VaultConsentRecord? _consent;
+    private List<VaultAuditEvent> _auditEvents = [];
+    private bool _loading;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+        try
+        {
+            _consent = await Finance.GetVaultConsentAsync();
+            _auditEvents = await Finance.GetVaultAuditLogAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private bool IsGranted(string scope)
+    {
+        if (_consent is null) return false;
+        return _consent.Scopes.Contains(scope) && !_consent.RevokedScopes.Contains(scope);
+    }
+
+    private async Task SetScope(string scope, bool granted)
+    {
+        try
+        {
+            _consent = await Finance.SetVaultConsentAsync(scope, granted);
+            _auditEvents = await Finance.GetVaultAuditLogAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+}

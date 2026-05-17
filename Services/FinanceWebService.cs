@@ -6,6 +6,8 @@ using OneLife.Web.Models.Finance.Assets;
 using OneLife.Web.Models.Finance.BankConnect;
 using OneLife.Web.Models.Finance.Business;
 using OneLife.Web.Models.Finance.Insurance;
+using OneLife.Web.Models.Finance.Vault;
+using OneLife.Web.Models.Finance.Agents;
 
 namespace OneLife.Web.Services;
 
@@ -278,5 +280,40 @@ public sealed class FinanceWebService
     {
         return await _http.GetFromJsonAsync<CategorizationResultDto>(
             $"/api/finance/transactions/{Uri.EscapeDataString(recordId)}/categorization?userId={Uri.EscapeDataString(UserId)}", ct);
+    }
+
+    // Phase 7: Vault Consent
+    public async Task<VaultConsentRecord?> GetVaultConsentAsync(CancellationToken ct = default)
+        => await _http.GetFromJsonAsync<VaultConsentRecord>(
+            $"/api/finance/vault/consent?userId={Uri.EscapeDataString(UserId)}", ct);
+
+    public async Task<VaultConsentRecord?> SetVaultConsentAsync(string scope, bool granted, CancellationToken ct = default)
+    {
+        var req = new SetVaultConsentRequest { UserId = UserId, Scope = scope, Granted = granted };
+        var resp = await _http.PostAsJsonAsync("/api/finance/vault/consent", req, ct);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<VaultConsentRecord>(cancellationToken: ct);
+    }
+
+    public async Task<List<VaultAuditEvent>> GetVaultAuditLogAsync(int limit = 50, CancellationToken ct = default)
+    {
+        var result = await _http.GetFromJsonAsync<List<VaultAuditEvent>>(
+            $"/api/finance/vault/audit-log?userId={Uri.EscapeDataString(UserId)}&limit={limit}", ct);
+        return result ?? [];
+    }
+
+    // Phase 7: Finance Agents
+    public async Task<List<string>> ListAgentsAsync(CancellationToken ct = default)
+    {
+        var result = await _http.GetFromJsonAsync<AgentListResponse>("/api/finance/agents", ct);
+        return result?.Agents ?? [];
+    }
+
+    public async Task<AgentResponse?> QueryAgentAsync(string agentName, string query, CancellationToken ct = default)
+    {
+        var req = new AgentQueryRequest { UserId = UserId, Query = query };
+        var resp = await _http.PostAsJsonAsync($"/api/finance/agents/{Uri.EscapeDataString(agentName)}/query", req, ct);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<AgentResponse>(cancellationToken: ct);
     }
 }

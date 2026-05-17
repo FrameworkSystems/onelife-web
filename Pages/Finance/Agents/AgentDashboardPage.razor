@@ -1,0 +1,62 @@
+@page "/finance/agents"
+@using OneLife.Web.Models.Finance.Agents
+@inject FinanceWebService Finance
+@inject NavigationManager Nav
+
+<MudText Typo="Typo.h4" Class="mb-2" Style="font-weight:700">Finance Agents</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+    12 AI-powered financial advisors for your money.
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+
+<MudGrid>
+    @foreach (var agent in _agents)
+    {
+        var (icon, label, color) = AgentMeta(agent);
+        <MudItem xs="12" sm="6" md="4">
+            <MudPaper Elevation="2" Class="pa-4" Style="cursor:pointer"
+                      @onclick="@(() => Nav.NavigateTo($"/finance/agents/{agent}"))">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@icon" Color="@color" Size="Size.Large" />
+                    <MudText Typo="Typo.subtitle1" Style="font-weight:600">@label</MudText>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    private List<string> _agents = [];
+    private bool _loading;
+
+    private static readonly Dictionary<string, (string icon, string label, Color color)> _meta = new()
+    {
+        ["cashflow"]          = (Icons.Material.Filled.TrendingUp,     "Cash Flow",        Color.Success),
+        ["budget"]            = (Icons.Material.Filled.AccountBalanceWallet, "Budget",      Color.Primary),
+        ["asset-advisor"]     = (Icons.Material.Filled.Apartment,       "Asset Advisor",   Color.Secondary),
+        ["net-worth"]         = (Icons.Material.Filled.Assessment,      "Net Worth",       Color.Tertiary),
+        ["pl-advisor"]        = (Icons.Material.Filled.BarChart,        "P&L Advisor",     Color.Warning),
+        ["insurance-advisor"] = (Icons.Material.Filled.HealthAndSafety, "Insurance",       Color.Info),
+        ["reconciliation"]    = (Icons.Material.Filled.CompareArrows,   "Reconciliation",  Color.Primary),
+        ["book-tag"]          = (Icons.Material.Filled.Label,           "Book Tag",        Color.Warning),
+        ["mortgage-advisor"]  = (Icons.Material.Filled.Home,            "Mortgage",        Color.Secondary),
+        ["schedule-c"]        = (Icons.Material.Filled.Description,     "Schedule C",      Color.Error),
+        ["529-education"]     = (Icons.Material.Filled.School,          "529 Education",   Color.Success),
+        ["contractor-income"] = (Icons.Material.Filled.Badge,           "1099 Income",     Color.Info),
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+        try { _agents = (await Finance.ListAgentsAsync()).OrderBy(x => x).ToList(); }
+        catch { _agents = _meta.Keys.OrderBy(x => x).ToList(); }
+        finally { _loading = false; }
+    }
+
+    private static (string, string, Color) AgentMeta(string name)
+        => _meta.TryGetValue(name, out var v) ? v : (Icons.Material.Filled.SmartToy, name, Color.Default);
+}
