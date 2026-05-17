@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using OneLife.Web.Models.Finance;
+using OneLife.Web.Models.Finance.Business;
 
 namespace OneLife.Web.Services;
 
@@ -86,5 +87,64 @@ public sealed class FinanceWebService
             return result?.GetValueOrDefault("suggestedBookTag");
         }
         catch { return null; }
+    }
+
+    public async Task<BusinessDashboardDto?> GetBusinessDashboardAsync(CancellationToken ct = default)
+    {
+        return await _http.GetFromJsonAsync<BusinessDashboardDto>(
+            $"/api/finance/business/dashboard?userId={Uri.EscapeDataString(UserId)}", ct);
+    }
+
+    public async Task<PLStatementDto?> GetPLStatementAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken ct = default)
+    {
+        return await _http.GetFromJsonAsync<PLStatementDto>(
+            $"/api/finance/business/pl-statement?userId={Uri.EscapeDataString(UserId)}&from={Uri.EscapeDataString(from.ToString("o"))}&to={Uri.EscapeDataString(to.ToString("o"))}", ct);
+    }
+
+    public async Task<ScheduleCDto?> GetScheduleCAsync(int taxYear, CancellationToken ct = default)
+    {
+        return await _http.GetFromJsonAsync<ScheduleCDto>(
+            $"/api/finance/business/schedule-c?userId={Uri.EscapeDataString(UserId)}&taxYear={taxYear}", ct);
+    }
+
+    public async Task<List<SalesInvoiceDto>> GetInvoicesAsync(string? status = null, CancellationToken ct = default)
+    {
+        var path = $"/api/finance/business/invoices?userId={Uri.EscapeDataString(UserId)}";
+        if (status is not null) path += $"&status={Uri.EscapeDataString(status)}";
+        var result = await _http.GetFromJsonAsync<List<SalesInvoiceDto>>(path, ct);
+        return result ?? [];
+    }
+
+    public async Task CreateInvoiceAsync(object req, CancellationToken ct = default)
+    {
+        var resp = await _http.PostAsJsonAsync($"/api/finance/business/invoices?userId={Uri.EscapeDataString(UserId)}", req, ct);
+        resp.EnsureSuccessStatusCode();
+    }
+
+    public async Task<bool> RecordReceiptAsync(string invoiceId, CancellationToken ct = default)
+    {
+        var req = new { invoiceId, paidAt = DateTimeOffset.UtcNow };
+        var resp = await _http.PostAsJsonAsync($"/api/finance/business/receipts?userId={Uri.EscapeDataString(UserId)}", req, ct);
+        return resp.IsSuccessStatusCode;
+    }
+
+    public async Task<List<InventoryItemDto>> GetInventoryAsync(CancellationToken ct = default)
+    {
+        var result = await _http.GetFromJsonAsync<List<InventoryItemDto>>(
+            $"/api/finance/business/inventory?userId={Uri.EscapeDataString(UserId)}", ct);
+        return result ?? [];
+    }
+
+    public async Task CreateInventoryItemAsync(object req, CancellationToken ct = default)
+    {
+        var resp = await _http.PostAsJsonAsync($"/api/finance/business/inventory?userId={Uri.EscapeDataString(UserId)}", req, ct);
+        resp.EnsureSuccessStatusCode();
+    }
+
+    public async Task<List<CustomerDto>> GetCustomersAsync(CancellationToken ct = default)
+    {
+        var result = await _http.GetFromJsonAsync<List<CustomerDto>>(
+            $"/api/finance/business/customers?userId={Uri.EscapeDataString(UserId)}", ct);
+        return result ?? [];
     }
 }

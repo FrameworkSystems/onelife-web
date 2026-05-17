@@ -1,0 +1,86 @@
+@page "/finance/business/invoices"
+@using OneLife.Web.Models.Finance.Business
+@inject FinanceWebService Finance
+
+<MudText Typo="Typo.h4" Class="mb-2" Style="font-weight:700">Invoices</MudText>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4" ShowCloseIcon="true"
+              CloseIconClicked="@(() => _error = null)">@_error</MudAlert>
+}
+
+@if (_successMessage is not null)
+{
+    <MudAlert Severity="Severity.Success" Dense="true" Class="mb-4">@_successMessage</MudAlert>
+}
+
+@if (_loading)
+{
+    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="300px" />
+}
+else
+{
+    <MudDataGrid T="SalesInvoiceDto" Items="_invoices" Dense="true" Hover="true" Elevation="1">
+        <Columns>
+            <PropertyColumn Property="x => x.InvoiceNumber" Title="Invoice #" />
+            <PropertyColumn Property="x => x.CustomerName" Title="Customer" />
+            <PropertyColumn Property="x => x.Total" Title="Amount" Format="C" />
+            <TemplateColumn Title="Status">
+                <CellTemplate>
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@StatusColor(context.Item.Status)"
+                             Variant="Variant.Filled">
+                        @context.Item.Status
+                    </MudChip>
+                </CellTemplate>
+            </TemplateColumn>
+            <TemplateColumn Title="Actions">
+                <CellTemplate>
+                    @if (context.Item.Status == "Sent")
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success"
+                                   OnClick="@(() => RecordReceipt(context.Item.Id))">
+                            Record Receipt
+                        </MudButton>
+                    }
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+    </MudDataGrid>
+}
+
+@code {
+    private List<SalesInvoiceDto> _invoices = [];
+    private bool _loading = true;
+    private string? _error;
+    private string? _successMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _invoices = await Finance.GetInvoicesAsync(); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task RecordReceipt(string invoiceId)
+    {
+        try
+        {
+            var ok = await Finance.RecordReceiptAsync(invoiceId);
+            if (ok)
+            {
+                _successMessage = "Receipt recorded successfully.";
+                _invoices = await Finance.GetInvoicesAsync();
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private static Color StatusColor(string status) => status switch
+    {
+        "Paid" => Color.Success,
+        "Draft" => Color.Default,
+        _ => Color.Warning
+    };
+}

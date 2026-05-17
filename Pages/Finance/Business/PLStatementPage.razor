@@ -1,0 +1,115 @@
+@page "/finance/business/pl-statement"
+@using OneLife.Web.Models.Finance.Business
+@inject FinanceWebService Finance
+
+<MudText Typo="Typo.h4" Class="mb-2" Style="font-weight:700">P&amp;L Statement</MudText>
+
+<MudPaper Elevation="1" Class="pa-4 mb-4">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3">
+        <MudDatePicker Label="From" @bind-Date="_from" />
+        <MudDatePicker Label="To" @bind-Date="_to" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadPL" Disabled="_loading">
+            Refresh
+        </MudButton>
+    </MudStack>
+</MudPaper>
+
+@if (_loading)
+{
+    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="300px" />
+}
+else if (_pl is not null)
+{
+    <MudPaper Elevation="1" Class="pa-3 mb-3">
+        <MudText Typo="Typo.subtitle2" Color="Color.Secondary" Class="mb-2">Revenue</MudText>
+        @foreach (var line in _pl.RevenueLines)
+        {
+            <MudStack Row="true" Class="mb-1">
+                <MudText Typo="Typo.body2">@line.Description</MudText>
+                <MudSpacer />
+                <MudText Typo="Typo.body2" Color="Color.Success">@line.Amount.ToString("C")</MudText>
+            </MudStack>
+        }
+        <MudDivider Class="my-2" />
+        <MudStack Row="true">
+            <MudText Typo="Typo.body1" Style="font-weight:600">Total Revenue</MudText>
+            <MudSpacer />
+            <MudText Typo="Typo.body1" Style="font-weight:600" Color="Color.Success">@_pl.RevenueLines.Sum(l => l.Amount).ToString("C")</MudText>
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Elevation="1" Class="pa-3 mb-3">
+        <MudText Typo="Typo.subtitle2" Color="Color.Secondary" Class="mb-2">Cost of Goods Sold</MudText>
+        @foreach (var line in _pl.CogsLines)
+        {
+            <MudStack Row="true" Class="mb-1">
+                <MudText Typo="Typo.body2">@line.Description</MudText>
+                <MudSpacer />
+                <MudText Typo="Typo.body2">@line.Amount.ToString("C")</MudText>
+            </MudStack>
+        }
+    </MudPaper>
+
+    <MudPaper Elevation="0" Class="pa-3 mb-3"
+              Style="@($"background:rgba({(_pl.GrossProfit >= 0 ? "52,199,89" : "239,68,68")},0.08)")">
+        <MudStack Row="true">
+            <MudText Typo="Typo.subtitle1" Style="font-weight:700">Gross Profit</MudText>
+            <MudSpacer />
+            <MudText Typo="Typo.subtitle1" Style="font-weight:700"
+                     Color="@(_pl.GrossProfit >= 0 ? Color.Success : Color.Error)">
+                @_pl.GrossProfit.ToString("C")
+            </MudText>
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Elevation="1" Class="pa-3 mb-3">
+        <MudText Typo="Typo.subtitle2" Color="Color.Secondary" Class="mb-2">Operating Expenses</MudText>
+        @foreach (var line in _pl.ExpenseLines)
+        {
+            <MudStack Row="true" Class="mb-1">
+                <MudText Typo="Typo.body2">@line.Description</MudText>
+                <MudSpacer />
+                <MudText Typo="Typo.body2" Color="Color.Error">@line.Amount.ToString("C")</MudText>
+            </MudStack>
+        }
+        <MudDivider Class="my-2" />
+        <MudStack Row="true">
+            <MudText Typo="Typo.body1" Style="font-weight:600">Total Expenses</MudText>
+            <MudSpacer />
+            <MudText Typo="Typo.body1" Style="font-weight:600" Color="Color.Error">@_pl.TotalExpenses.ToString("C")</MudText>
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Elevation="1" Class="pa-3">
+        <MudStack Row="true">
+            <MudText Typo="Typo.h6" Style="font-weight:700">Net Income</MudText>
+            <MudSpacer />
+            <MudText Typo="Typo.h6" Style="font-weight:700"
+                     Color="@(_pl.NetIncome >= 0 ? Color.Success : Color.Error)">
+                @_pl.NetIncome.ToString("C")
+            </MudText>
+        </MudStack>
+    </MudPaper>
+}
+
+@code {
+    private PLStatementDto? _pl;
+    private bool _loading;
+    private DateTime? _from = new DateTime(DateTime.Now.Year, DateTime.Now.Month, 1);
+    private DateTime? _to = DateTime.Now;
+
+    protected override async Task OnInitializedAsync() => await LoadPL();
+
+    private async Task LoadPL()
+    {
+        _loading = true;
+        try
+        {
+            var from = new DateTimeOffset(_from ?? DateTime.Now.AddDays(-30));
+            var to = new DateTimeOffset(_to ?? DateTime.Now);
+            _pl = await Finance.GetPLStatementAsync(from, to);
+        }
+        catch { }
+        finally { _loading = false; }
+    }
+}

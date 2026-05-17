@@ -1,0 +1,50 @@
+@page "/finance/business/inventory"
+@using OneLife.Web.Models.Finance.Business
+@inject FinanceWebService Finance
+
+<MudText Typo="Typo.h4" Class="mb-2" Style="font-weight:700">Inventory</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+    Product catalog with quantity on hand and low-stock alerts.
+</MudText>
+
+@if (_loading)
+{
+    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="300px" />
+}
+else
+{
+    <MudDataGrid T="InventoryItemDto" Items="_items" Dense="true" Hover="true" Elevation="1">
+        <Columns>
+            <PropertyColumn Property="x => x.Description" Title="Item" />
+            <PropertyColumn Property="x => x.Cost" Title="Unit Cost" Format="C" />
+            <PropertyColumn Property="x => x.SalePrice" Title="Sale Price" Format="C" />
+            <TemplateColumn Title="Qty on Hand">
+                <CellTemplate>
+                    @if (context.Item.IsLowStock)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.Warning">
+                            @context.Item.QuantityOnHand.ToString("F0")
+                        </MudChip>
+                    }
+                    else
+                    {
+                        <MudText>@context.Item.QuantityOnHand.ToString("F0")</MudText>
+                    }
+                </CellTemplate>
+            </TemplateColumn>
+            <PropertyColumn Property="x => x.ReorderPoint" Title="Reorder At" Format="F0" />
+        </Columns>
+    </MudDataGrid>
+}
+
+@code {
+    private List<InventoryItemDto> _items = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _items = await Finance.GetInventoryAsync(); }
+        catch { }
+        finally { _loading = false; }
+    }
+}

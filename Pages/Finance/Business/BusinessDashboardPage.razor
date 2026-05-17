@@ -1,0 +1,161 @@
+@page "/finance/business"
+@using OneLife.Web.Models.Finance.Business
+@inject FinanceWebService Finance
+@inject NavigationManager Nav
+
+<MudText Typo="Typo.h4" Class="mb-2" Style="font-weight:700">Business Dashboard</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+    P&amp;L, revenue pace, cash runway, and recent sales.
+</MudText>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4" ShowCloseIcon="true"
+              CloseIconClicked="@(() => _error = null)">@_error</MudAlert>
+}
+
+@if (_db?.SalesTaxAlert is not null)
+{
+    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-4">@_db.SalesTaxAlert</MudAlert>
+}
+
+@if (_loading)
+{
+    <MudGrid Spacing="3" Class="mb-6">
+        @for (var i = 0; i < 4; i++)
+        {
+            <MudItem xs="12" sm="6" lg="3">
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="100px" />
+            </MudItem>
+        }
+    </MudGrid>
+}
+else if (_db is not null)
+{
+    <MudGrid Spacing="3" Class="mb-6">
+        <MudItem xs="12" sm="6" lg="3">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Revenue MTD</MudText>
+                    <MudText Typo="Typo.h3" Style="font-weight:700;color:var(--mud-palette-success)">
+                        @_db.TotalRevenueMtd.ToString("C")
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" sm="6" lg="3">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Gross Profit</MudText>
+                    <MudText Typo="Typo.h3" Style="font-weight:700"
+                             Color="@(_db.GrossProfit >= 0 ? Color.Success : Color.Error)">
+                        @_db.GrossProfit.ToString("C")
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" sm="6" lg="3">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Net Income</MudText>
+                    <MudText Typo="Typo.h3" Style="font-weight:700"
+                             Color="@(_db.NetIncome >= 0 ? Color.Success : Color.Error)">
+                        @_db.NetIncome.ToString("C")
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" sm="6" lg="3">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Cash Runway</MudText>
+                    <MudText Typo="Typo.h3" Style="font-weight:700"
+                             Color="@RunwayColor(_db.RunwayDays)">
+                        @(_db.RunwayDays.HasValue ? $"{_db.RunwayDays}d" : "—")
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+    @if (_db.RevenuePaceFraction.HasValue)
+    {
+        <MudPaper Elevation="1" Class="pa-4 mb-6">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                <MudText Typo="Typo.subtitle1" Style="font-weight:600">Revenue Pace</MudText>
+                <MudSpacer />
+                <MudText Typo="Typo.body1" Color="@PaceColor(_db.RevenuePaceFraction.Value)">
+                    @((int)(_db.RevenuePaceFraction.Value * 100))%
+                </MudText>
+            </MudStack>
+            <MudProgressLinear Color="@PaceColor(_db.RevenuePaceFraction.Value)"
+                               Value="@((double)(_db.RevenuePaceFraction.Value * 100))"
+                               Max="100" Rounded="true" Size="Size.Large" />
+            @if (_db.RevenueGoalMtd.HasValue)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                    Goal: @_db.RevenueGoalMtd.Value.ToString("C")
+                </MudText>
+            }
+        </MudPaper>
+    }
+
+    @if (_db.RecentSales.Count > 0)
+    {
+        <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight:700">Recent Sales</MudText>
+        <MudTable Items="_db.RecentSales" Dense="true" Hover="true" Elevation="1" Class="mb-6">
+            <HeaderContent>
+                <MudTh>Invoice</MudTh>
+                <MudTh>Customer</MudTh>
+                <MudTh>Amount</MudTh>
+                <MudTh>Date</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.InvoiceNo</MudTd>
+                <MudTd>@context.CustomerName</MudTd>
+                <MudTd Style="color:var(--mud-palette-success);font-weight:600">@context.Total.ToString("C")</MudTd>
+                <MudTd>@context.Date.ToString("MMM d")</MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+
+    <MudStack Row="true" Spacing="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   Href="/finance/business/pl-statement"
+                   StartIcon="@Icons.Material.Filled.BarChart">
+            P&amp;L Statement
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                   Href="/finance/business/schedule-c"
+                   StartIcon="@Icons.Material.Filled.Description">
+            Schedule C Draft
+        </MudButton>
+    </MudStack>
+}
+
+@code {
+    private BusinessDashboardDto? _db;
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _db = await Finance.GetBusinessDashboardAsync(); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private static Color RunwayColor(int? days) => days switch
+    {
+        > 180 => Color.Success,
+        >= 90 => Color.Warning,
+        _ => Color.Error
+    };
+
+    private static Color PaceColor(decimal fraction) => fraction switch
+    {
+        >= 1m => Color.Success,
+        >= 0.7m => Color.Warning,
+        _ => Color.Error
+    };
+}

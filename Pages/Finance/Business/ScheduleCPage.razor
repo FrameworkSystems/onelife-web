@@ -1,0 +1,92 @@
+@page "/finance/business/schedule-c"
+@using OneLife.Web.Models.Finance.Business
+@inject FinanceWebService Finance
+
+<MudText Typo="Typo.h4" Class="mb-4" Style="font-weight:700">Schedule C Draft</MudText>
+
+@* LEGAL-01: Disclaimer — rendered OUTSIDE any scroll container, always visible *@
+@if (_draft is not null)
+{
+    <MudPaper Elevation="0" Style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px" Class="pa-4 mb-6">
+        <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.Warning" Style="color:#92400E;margin-top:2px" />
+            <MudText Typo="Typo.body2" Style="color:#92400E">@_draft.Disclaimer</MudText>
+        </MudStack>
+    </MudPaper>
+}
+else if (_loading)
+{
+    <MudPaper Elevation="0" Style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px" Class="pa-4 mb-6">
+        <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.Warning" Style="color:#92400E;margin-top:2px" />
+            <MudText Typo="Typo.body2" Style="color:#92400E">
+                This is a draft for informational purposes only. It is not tax advice.
+                Consult a qualified tax professional before filing.
+            </MudText>
+        </MudStack>
+    </MudPaper>
+}
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudText Typo="Typo.subtitle1" Style="font-weight:600">Tax Year</MudText>
+    <MudSelect T="int" @bind-Value="_taxYear" Class="ml-4" Style="max-width:120px">
+        @for (var y = DateTime.Now.Year; y >= DateTime.Now.Year - 3; y--)
+        {
+            <MudSelectItem Value="@y">@y</MudSelectItem>
+        }
+    </MudSelect>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadDraft" Disabled="_loading" Class="ml-3">
+        Refresh
+    </MudButton>
+</MudStack>
+
+@if (_loading)
+{
+    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="400px" />
+}
+else if (_draft is not null)
+{
+    <MudText Typo="Typo.h6" Class="mb-3" Style="font-weight:600">
+        Schedule C — Profit or Loss From Business (Tax Year @_draft.TaxYear)
+    </MudText>
+
+    <MudTable Items="_draft.Lines" Dense="true" Hover="true" Elevation="1">
+        <HeaderContent>
+            <MudTh Style="width:80px">Line</MudTh>
+            <MudTh>Description</MudTh>
+            <MudTh Style="text-align:right;width:140px">Amount</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@context.LineNumber</MudText>
+            </MudTd>
+            <MudTd>@context.Description</MudTd>
+            <MudTd Style="@($"text-align:right;font-weight:{(context.LineNumber == "31" ? "700" : "400")}")">
+                <MudText Color="@(context.Amount < 0 ? Color.Error : Color.Default)">
+                    @context.Amount.ToString("C")
+                </MudText>
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+
+@code {
+    private ScheduleCDto? _draft;
+    private bool _loading = true;
+    private string? _error;
+    private int _taxYear = DateTime.Now.Year;
+
+    protected override async Task OnInitializedAsync() => await LoadDraft();
+
+    private async Task LoadDraft()
+    {
+        _loading = true;
+        try { _draft = await Finance.GetScheduleCAsync(_taxYear); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+}
