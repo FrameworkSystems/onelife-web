@@ -1,5 +1,6 @@
 @page "/finance/transactions"
 @using OneLife.Web.Models.Finance.BankConnect
+@using OneLife.Web.Models.Finance.Insurance
 @using OneLife.Web.Components.Finance
 @inject FinanceWebService Finance
 
@@ -55,7 +56,8 @@ else if (_transactions.Count == 0)
 }
 else
 {
-    <MudDataGrid T="TransactionDto" Items="_transactions" Dense="true" Hover="true" Elevation="1">
+    <MudDataGrid T="TransactionDto" Items="_transactions" Dense="true" Hover="true" Elevation="1"
+                 RowClick="OnRowClick" SelectedItem="_selected">
         <Columns>
             <PropertyColumn Property="x => x.PostedAt" Title="Date">
                 <CellTemplate>@context.Item.PostedAt.ToString("MMM d, yyyy")</CellTemplate>
@@ -81,6 +83,14 @@ else
                 </CellTemplate>
             </PropertyColumn>
         </Columns>
+        <ChildRowContent>
+            @if (context.Item.Id == _selected?.Id)
+            {
+                <td colspan="6" class="pa-0">
+                    <BookTagSuggestionBanner RecordId="@context.Item.Id" />
+                </td>
+            }
+        </ChildRowContent>
     </MudDataGrid>
 }
 
@@ -90,6 +100,7 @@ else
     private bool _loading = true;
     private string? _error;
     private string? _bookTagFilter;
+    private TransactionDto? _selected;
     private DateRange _dateRange = new(DateTimeOffset.UtcNow.AddMonths(-1).DateTime, DateTimeOffset.UtcNow.DateTime);
 
     protected override async Task OnInitializedAsync()
@@ -121,6 +132,11 @@ else
     {
         _bookTagFilter = tag;
         _ = LoadTransactions();
+    }
+
+    private void OnRowClick(DataGridRowClickEventArgs<TransactionDto> args)
+    {
+        _selected = _selected?.Id == args.Item.Id ? null : args.Item;
     }
 
     private void OnRecordResolved(ReconciliationDto resolved)

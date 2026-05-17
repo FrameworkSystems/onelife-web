@@ -5,6 +5,7 @@ using OneLife.Web.Models.Finance;
 using OneLife.Web.Models.Finance.Assets;
 using OneLife.Web.Models.Finance.BankConnect;
 using OneLife.Web.Models.Finance.Business;
+using OneLife.Web.Models.Finance.Insurance;
 
 namespace OneLife.Web.Services;
 
@@ -241,5 +242,41 @@ public sealed class FinanceWebService
         if (to.HasValue) path += $"&to={Uri.EscapeDataString(to.Value.ToString("o"))}";
         var result = await _http.GetFromJsonAsync<List<TransactionDto>>(path, ct);
         return result ?? [];
+    }
+
+    // Phase 6: Insurance Sync
+    public async Task<List<InsuranceRecordDto>> GetPremiumsAsync(CancellationToken ct = default)
+    {
+        var result = await _http.GetFromJsonAsync<List<InsuranceRecordDto>>(
+            $"/api/finance/insurance/premiums?userId={Uri.EscapeDataString(UserId)}", ct);
+        return result ?? [];
+    }
+
+    public async Task<List<InsuranceRecordDto>> GetClaimsAsync(CancellationToken ct = default)
+    {
+        var result = await _http.GetFromJsonAsync<List<InsuranceRecordDto>>(
+            $"/api/finance/insurance/claims?userId={Uri.EscapeDataString(UserId)}", ct);
+        return result ?? [];
+    }
+
+    public async Task<HsaFsaSummaryDto?> GetHsaFsaAsync(CancellationToken ct = default)
+    {
+        return await _http.GetFromJsonAsync<HsaFsaSummaryDto>(
+            $"/api/finance/insurance/hsa-fsa?userId={Uri.EscapeDataString(UserId)}", ct);
+    }
+
+    public async Task<InsuranceRecordDto?> PostInsuranceEventAsync(InsuranceEventRequest req, CancellationToken ct = default)
+    {
+        req.UserId = UserId;
+        var resp = await _http.PostAsJsonAsync("/api/finance/insurance/event", req, ct);
+        if (!resp.IsSuccessStatusCode) return null;
+        return await resp.Content.ReadFromJsonAsync<InsuranceRecordDto>(cancellationToken: ct);
+    }
+
+    // Phase 6: AI Categorization
+    public async Task<CategorizationResultDto?> GetTransactionCategorizationAsync(string recordId, CancellationToken ct = default)
+    {
+        return await _http.GetFromJsonAsync<CategorizationResultDto>(
+            $"/api/finance/transactions/{Uri.EscapeDataString(recordId)}/categorization?userId={Uri.EscapeDataString(UserId)}", ct);
     }
 }

@@ -1,0 +1,54 @@
+@using OneLife.Web.Models.Finance.Insurance
+
+@if (_cat is not null)
+{
+    <MudPaper Elevation="0" Class="pa-3 mud-theme-secondary" Style="border-left:4px solid var(--mud-palette-warning)">
+        <MudText Typo="Typo.caption" Color="Color.Secondary">AI Categorization — @_cat.L4Source</MudText>
+        <MudStack Row="true" Spacing="2" Class="mt-1 flex-wrap">
+            @if (_cat.L1PlaidCategory is not null)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Default" Label="true">L1: @_cat.L1PlaidCategory</MudChip>
+            }
+            @if (_cat.L2MerchantAlias is not null)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" Label="true">
+                    L2: @_cat.L2MerchantAlias (@_cat.L2RuleConfidenceCount×)
+                </MudChip>
+            }
+            @if (_cat.L3GptSuggestion is not null)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Label="true">
+                    L3: @_cat.L3GptSuggestion @(_cat.L3FromCache ? "(cached)" : "(live)")
+                </MudChip>
+            }
+            <MudChip T="string" Size="Size.Small" Color="@ConfidenceColor(_cat.L4Confidence)" Label="true">
+                L4: @_cat.L4BookTagSuggestion (@((_cat.L4Confidence * 100).ToString("F0"))%)
+            </MudChip>
+        </MudStack>
+    </MudPaper>
+}
+else if (_loading)
+{
+    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="48px" />
+}
+
+@code {
+    [Parameter] public required string RecordId { get; set; }
+    [Inject] private FinanceWebService Finance { get; set; } = null!;
+
+    private CategorizationResultDto? _cat;
+    private bool _loading;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrEmpty(RecordId))
+        {
+            _loading = true;
+            try { _cat = await Finance.GetTransactionCategorizationAsync(RecordId); }
+            catch { /* non-critical */ }
+            finally { _loading = false; }
+        }
+    }
+
+    private static Color ConfidenceColor(double c) => c >= 0.85 ? Color.Success : c >= 0.55 ? Color.Warning : Color.Default;
+}

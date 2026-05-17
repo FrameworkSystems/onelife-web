@@ -1,0 +1,148 @@
+@page "/finance/insurance"
+@using OneLife.Web.Models.Finance.Insurance
+@inject FinanceWebService Finance
+
+<MudText Typo="Typo.h4" Class="mb-2" Style="font-weight:700">Insurance Ledger</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+    Premiums, claims, and HSA / FSA balances.
+</MudText>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4" ShowCloseIcon="true"
+              CloseIconClicked="@(() => _error = null)">@_error</MudAlert>
+}
+
+@if (_hsaFsa is not null)
+{
+    <MudGrid Class="mb-6">
+        <MudItem xs="12" sm="6">
+            <MudPaper Elevation="2" Class="pa-4">
+                <MudText Typo="Typo.overline" Color="Color.Success">HSA</MudText>
+                <MudText Typo="Typo.h5" Style="font-weight:700">@_hsaFsa.HsaBalance.ToString("C")</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">YTD contributions: @_hsaFsa.HsaContributionsYtd.ToString("C")</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudPaper Elevation="2" Class="pa-4">
+                <MudText Typo="Typo.overline" Color="Color.Warning">FSA</MudText>
+                <MudText Typo="Typo.h5" Style="font-weight:700">@_hsaFsa.FsaBalance.ToString("C")</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">YTD contributions: @_hsaFsa.FsaContributionsYtd.ToString("C")</MudText>
+                @if (_hsaFsa.FsaDaysRemaining.HasValue && _hsaFsa.FsaDaysRemaining <= 90)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                        FSA plan year ends in @_hsaFsa.FsaDaysRemaining days — use remaining balance.
+                    </MudAlert>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+<MudTabs Elevation="0" Rounded="true" PanelClass="pt-4">
+    <MudTabPanel Text="Premiums">
+        <MudDataGrid T="InsuranceRecordDto" Items="_premiums" Loading="_loading"
+                     Filterable="false" SortMode="SortMode.None" Elevation="0">
+            <Columns>
+                <PropertyColumn Property="r => r.InsuranceType" Title="Type" />
+                <PropertyColumn Property="r => r.EventType" Title="Event" />
+                <PropertyColumn Property="r => r.Amount" Title="Amount" Format="C" />
+                <PropertyColumn Property="r => r.IsBusinessPremium" Title="Business" />
+                <PropertyColumn Property="r => r.ProcessedAt.LocalDateTime" Title="Date" Format="d" />
+            </Columns>
+        </MudDataGrid>
+    </MudTabPanel>
+    <MudTabPanel Text="Claims">
+        <MudDataGrid T="InsuranceRecordDto" Items="_claims" Loading="_loading"
+                     Filterable="false" SortMode="SortMode.None" Elevation="0">
+            <Columns>
+                <PropertyColumn Property="r => r.InsuranceType" Title="Type" />
+                <PropertyColumn Property="r => r.Amount" Title="Amount" Format="C" />
+                <PropertyColumn Property="r => r.IsTotalLoss" Title="Total Loss" />
+                <PropertyColumn Property="r => r.ProcessedAt.LocalDateTime" Title="Date" Format="d" />
+            </Columns>
+        </MudDataGrid>
+    </MudTabPanel>
+    <MudTabPanel Text="Log Event">
+        <MudPaper Elevation="0" Class="pa-4" MaxWidth="480px">
+            <MudSelect @bind-Value="_form.EventType" Label="Event Type" Class="mb-3">
+                @foreach (var et in _eventTypes)
+                {
+                    <MudSelectItem Value="@et">@et</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect @bind-Value="_form.InsuranceType" Label="Insurance Type" Class="mb-3">
+                @foreach (var it in _insuranceTypes)
+                {
+                    <MudSelectItem Value="@it">@it</MudSelectItem>
+                }
+            </MudSelect>
+            <MudNumericField @bind-Value="_form.Amount" Label="Amount" Format="F2" Class="mb-3" />
+            <MudCheckBox @bind-Value="_form.IsBusinessPremium" Label="Business Premium" Class="mb-3" />
+            @if (_form.EventType == "ClaimSettled")
+            {
+                <MudCheckBox @bind-Value="_form.IsTotalLoss" Label="Total Loss" Class="mb-2" />
+                @if (_form.IsTotalLoss)
+                {
+                    <MudTextField @bind-Value="_form.LinkedAssetId" Label="Linked Asset ID" Class="mb-3" />
+                }
+            }
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SubmitEventAsync"
+                       Disabled="_posting">
+                @(_posting ? "Saving…" : "Log Event")
+            </MudButton>
+        </MudPaper>
+    </MudTabPanel>
+</MudTabs>
+
+@code {
+    private List<InsuranceRecordDto> _premiums = [];
+    private List<InsuranceRecordDto> _claims = [];
+    private HsaFsaSummaryDto? _hsaFsa;
+    private bool _loading = true;
+    private bool _posting;
+    private string? _error;
+    private InsuranceEventRequest _form = new() { EventType = "PremiumPaymentCleared", InsuranceType = "Auto" };
+
+    private static readonly string[] _eventTypes =
+        ["PremiumPaymentCleared", "PrepaidPremiumPaid", "ClaimSettled", "HSAContributionPosted", "FSAContributionPosted"];
+    private static readonly string[] _insuranceTypes =
+        ["Auto", "Home", "Life", "Health", "Disability", "Other"];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var p = Finance.GetPremiumsAsync();
+            var c = Finance.GetClaimsAsync();
+            var h = Finance.GetHsaFsaAsync();
+            await Task.WhenAll(p, c, h);
+            _premiums = p.Result;
+            _claims = c.Result;
+            _hsaFsa = h.Result;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task SubmitEventAsync()
+    {
+        if (_posting) return;
+        _posting = true;
+        try
+        {
+            var result = await Finance.PostInsuranceEventAsync(_form);
+            if (result is null) { _error = "Failed to log event."; return; }
+            _form = new() { EventType = "PremiumPaymentCleared", InsuranceType = "Auto" };
+            var p = Finance.GetPremiumsAsync();
+            var c = Finance.GetClaimsAsync();
+            var h = Finance.GetHsaFsaAsync();
+            await Task.WhenAll(p, c, h);
+            _premiums = p.Result;
+            _claims = c.Result;
+            _hsaFsa = h.Result;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _posting = false; }
+    }
+}
