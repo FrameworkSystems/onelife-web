@@ -1,0 +1,123 @@
+@page "/finance/net-worth"
+@using OneLife.Web.Models.Finance.Assets
+@inject FinanceWebService Finance
+
+<MudText Typo="Typo.h4" Class="mb-2" Style="font-weight:700">Net Worth</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+    Cash, assets, and liabilities across all accounts.
+</MudText>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4" ShowCloseIcon="true"
+              CloseIconClicked="@(() => _error = null)">@_error</MudAlert>
+}
+
+<MudPaper Elevation="0" Class="mb-4">
+    <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+        <MudButton OnClick="@(() => SetBookTag(null))"
+                   Color="@(_bookTag is null ? Color.Primary : Color.Default)">All</MudButton>
+        <MudButton OnClick="@(() => SetBookTag("Personal"))"
+                   Color="@(_bookTag == "Personal" ? Color.Primary : Color.Default)">Personal</MudButton>
+        <MudButton OnClick="@(() => SetBookTag("Business"))"
+                   Color="@(_bookTag == "Business" ? Color.Primary : Color.Default)">Business</MudButton>
+    </MudButtonGroup>
+</MudPaper>
+
+@if (_loading)
+{
+    <MudGrid Spacing="3" Class="mb-6">
+        @for (var i = 0; i < 3; i++)
+        {
+            <MudItem xs="12" sm="4">
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="100px" />
+            </MudItem>
+        }
+    </MudGrid>
+}
+else if (_nw is not null)
+{
+    @* Total Net Worth *@
+    <MudPaper Elevation="2" Class="pa-6 mb-6 d-flex flex-column align-center">
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Total Net Worth</MudText>
+        <MudText Typo="Typo.h2" Style="@($"font-weight:700;color:{(_nw.NetWorth >= 0 ? "var(--mud-palette-success)" : "var(--mud-palette-error)")}")">
+            @_nw.NetWorth.ToString("C")
+        </MudText>
+    </MudPaper>
+
+    @* Segment Cards *@
+    <MudGrid Spacing="3" Class="mb-6">
+        <MudItem xs="12" sm="4">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Cash</MudText>
+                    <MudText Typo="Typo.h4" Style="font-weight:700;color:#3B7AF9">@_nw.Cash.ToString("C")</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Assets</MudText>
+                    <MudText Typo="Typo.h4" Style="font-weight:700;color:var(--mud-palette-success)">@_nw.Assets.ToString("C")</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Liabilities</MudText>
+                    <MudText Typo="Typo.h4" Style="font-weight:700;color:var(--mud-palette-error)">@_nw.Liabilities.ToString("C")</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+
+    @* Asset Breakdown *@
+    @if (_nw.AssetBreakdown.Count > 0)
+    {
+        <MudPaper Elevation="2" Class="pa-4">
+            <MudText Typo="Typo.subtitle1" Style="font-weight:600" Class="mb-3">Asset Breakdown</MudText>
+            <MudList T="AssetBreakdownItemDto" Dense="true">
+                @foreach (var item in _nw.AssetBreakdown)
+                {
+                    <MudListItem T="AssetBreakdownItemDto">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.body2">@item.Name</MudText>
+                            <MudText Typo="Typo.body2" Style="font-weight:600">@item.Value.ToString("C")</MudText>
+                        </MudStack>
+                    </MudListItem>
+                }
+            </MudList>
+        </MudPaper>
+    }
+}
+else
+{
+    <MudPaper Class="pa-8 d-flex flex-column align-center" Elevation="1">
+        <MudText Typo="Typo.h4" Color="Color.Secondary">—</MudText>
+    </MudPaper>
+}
+
+@code {
+    private NetWorthDto? _nw;
+    private bool _loading = true;
+    private string? _error;
+    private string? _bookTag;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task SetBookTag(string? tag)
+    {
+        _bookTag = tag;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try { _nw = await Finance.GetNetWorthAsync(_bookTag); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+}

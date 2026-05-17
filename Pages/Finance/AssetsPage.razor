@@ -1,0 +1,347 @@
+@page "/finance/assets"
+@using OneLife.Web.Models.Finance.Assets
+@using OneLife.Web.Components.Finance
+@inject FinanceWebService Finance
+
+<MudText Typo="Typo.h4" Class="mb-2" Style="font-weight:700">Assets</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-6">
+    Fixed assets with depreciation tracking and book value.
+</MudText>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4" ShowCloseIcon="true"
+              CloseIconClicked="@(() => _error = null)">@_error</MudAlert>
+}
+
+<MudPaper Elevation="0" Class="mb-4 d-flex gap-3 flex-wrap align-center">
+    <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small">
+        <MudButton OnClick="@(() => SetBookTagFilter(null))"
+                   Color="@(_bookTagFilter is null ? Color.Primary : Color.Default)">All</MudButton>
+        <MudButton OnClick="@(() => SetBookTagFilter("Personal"))"
+                   Color="@(_bookTagFilter == "Personal" ? Color.Primary : Color.Default)">Personal</MudButton>
+        <MudButton OnClick="@(() => SetBookTagFilter("Business"))"
+                   Color="@(_bookTagFilter == "Business" ? Color.Primary : Color.Default)">Business</MudButton>
+    </MudButtonGroup>
+    <MudCheckBox @bind-Value="_includeDisposed" Label="Include Disposed" Size="Size.Small" />
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="@(() => _showAddDialog = true)">Add Asset</MudButton>
+</MudPaper>
+
+@if (_loading)
+{
+    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="300px" />
+}
+else if (_assets.Count == 0)
+{
+    <MudPaper Class="pa-8 d-flex flex-column align-center" Elevation="1">
+        <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Size="Size.Large" Color="Color.Secondary" Class="mb-2" />
+        <MudText Typo="Typo.h6">No assets tracked</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Add your first asset to track depreciation and net worth.</MudText>
+    </MudPaper>
+}
+else
+{
+    <MudDataGrid T="AssetDto" Items="_assets" Dense="true" Hover="true" Elevation="1"
+                 RowClick="@OnRowClick" Class="mb-4">
+        <Columns>
+            <PropertyColumn Property="x => x.Name" Title="Asset" />
+            <PropertyColumn Property="x => x.Category" Title="Category" />
+            <TemplateColumn Title="Method">
+                <CellTemplate>
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@(context.Item.DepreciationMethod == "MACRS" ? Color.Secondary : Color.Info)">
+                        @(context.Item.DepreciationMethod == "MACRS" ? "MACRS" : "SL")
+                    </MudChip>
+                </CellTemplate>
+            </TemplateColumn>
+            <PropertyColumn Property="x => x.CurrentBookValue" Title="Book Value" Format="C" />
+            <PropertyColumn Property="x => x.AccumulatedDepreciation" Title="Accumulated Depr." Format="C" />
+            <TemplateColumn Title="Status">
+                <CellTemplate>
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@(context.Item.Status == "Disposed" ? Color.Default : Color.Success)">
+                        @context.Item.Status
+                    </MudChip>
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+    </MudDataGrid>
+}
+
+@* Asset Detail Dialog *@
+<MudDialog @bind-Visible="_showDetailDialog" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@_selectedAsset?.Name</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_selectedAsset is not null)
+        {
+            <MudGrid Spacing="2" Class="mb-4">
+                <MudItem xs="6">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Purchase Price</MudText>
+                    <MudText Typo="Typo.body1" Style="font-weight:600">@_selectedAsset.PurchasePrice.ToString("C")</MudText>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Book Value</MudText>
+                    <MudText Typo="Typo.body1" Style="font-weight:600">@_selectedAsset.CurrentBookValue.ToString("C")</MudText>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Accumulated Depr.</MudText>
+                    <MudText Typo="Typo.body1">@_selectedAsset.AccumulatedDepreciation.ToString("C")</MudText>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Method</MudText>
+                    <MudText Typo="Typo.body1">@(_selectedAsset.DepreciationMethod == "StraightLine" ? "Straight-Line" : "MACRS")</MudText>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Purchased</MudText>
+                    <MudText Typo="Typo.body1">@_selectedAsset.PurchaseDate.ToString("MMM d, yyyy")</MudText>
+                </MudItem>
+                <MudItem xs="6">
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Ownership</MudText>
+                    <MudText Typo="Typo.body1">@_selectedAsset.BookTag</MudText>
+                </MudItem>
+                @if (_selectedAsset.GainOrLoss.HasValue)
+                {
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            @(_selectedAsset.GainOrLoss >= 0 ? "Gain on Disposal" : "Loss on Disposal")
+                        </MudText>
+                        <MudText Typo="Typo.body1"
+                                 Style="@(_selectedAsset.GainOrLoss >= 0 ? "color:var(--mud-palette-success)" : "color:var(--mud-palette-error)")">
+                            @Math.Abs(_selectedAsset.GainOrLoss.Value).ToString("C")
+                        </MudText>
+                    </MudItem>
+                }
+            </MudGrid>
+
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Depreciation Schedule</MudText>
+            @if (_scheduleLoading)
+            {
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="120px" />
+            }
+            else
+            {
+                <DepreciationScheduleTable Schedule="_schedule" />
+            }
+
+            @if (_selectedAsset.Status == "Active")
+            {
+                <MudDivider Class="my-4" />
+                <MudText Typo="Typo.subtitle2" Class="mb-3">Dispose Asset</MudText>
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="4">
+                        <MudSelect @bind-Value="_disposeType" Label="Disposal Type" Dense="true">
+                            <MudSelectItem Value="@("Sale")">Sale</MudSelectItem>
+                            <MudSelectItem Value="@("Donation")">Donation</MudSelectItem>
+                            <MudSelectItem Value="@("TotalLoss")">Total Loss</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudDatePicker @bind-Date="_disposeDate" Label="Disposal Date" Dense="true" />
+                    </MudItem>
+                    @if (_disposeType == "Sale")
+                    {
+                        <MudItem xs="12" sm="4">
+                            <MudNumericField @bind-Value="_disposePrice" Label="Sale Price" Format="C" Dense="true" />
+                        </MudItem>
+                    }
+                </MudGrid>
+                @if (_disposeError is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@_disposeError</MudAlert>
+                }
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => { _showDetailDialog = false; _schedule = null; })">Close</MudButton>
+        @if (_selectedAsset?.Status == "Active")
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="ConfirmDispose"
+                       Disabled="_disposing">
+                @if (_disposing) { <MudProgressCircular Size="Size.Small" Indeterminate="true" /> } else { <span>Record Disposal</span> }
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@* Add Asset Dialog *@
+<MudDialog @bind-Visible="_showAddDialog" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Add Asset</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudGrid Spacing="2">
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_newReq.Name" Label="Name" Required="true" Dense="true" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_newReq.Description" Label="Description (optional)" Dense="true" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect @bind-Value="_newReq.Category" Label="Category" Dense="true">
+                    @foreach (var c in _categories)
+                    {
+                        <MudSelectItem Value="@c">@c</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudNumericField @bind-Value="_newReq.PurchasePrice" Label="Purchase Price" Format="C" Dense="true" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudDatePicker @bind-Date="_purchaseDate" Label="Purchase Date" Dense="true" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect @bind-Value="_newReq.DepreciationMethod" Label="Depreciation Method" Dense="true">
+                    <MudSelectItem Value="@("StraightLine")">Straight-Line</MudSelectItem>
+                    <MudSelectItem Value="@("MACRS")">MACRS</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            @if (_newReq.DepreciationMethod == "StraightLine")
+            {
+                <MudItem xs="12" sm="6">
+                    <MudNumericField @bind-Value="_usefulLifeYears" Label="Useful Life (years)" Min="1" Max="40" Dense="true" />
+                </MudItem>
+            }
+            else
+            {
+                <MudItem xs="12" sm="6">
+                    <MudSelect @bind-Value="_newReq.MacrsClass" Label="MACRS Class" Dense="true">
+                        <MudSelectItem Value="@("3-year")">3-year</MudSelectItem>
+                        <MudSelectItem Value="@("5-year")">5-year</MudSelectItem>
+                        <MudSelectItem Value="@("7-year")">7-year</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+            }
+            <MudItem xs="12" sm="6">
+                <MudSelect @bind-Value="_newReq.BookTag" Label="Ownership" Dense="true">
+                    <MudSelectItem Value="@("Personal")">Personal</MudSelectItem>
+                    <MudSelectItem Value="@("Business")">Business</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+        @if (_addError is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@_addError</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _showAddDialog = false)">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveNewAsset"
+                   Disabled="@(string.IsNullOrWhiteSpace(_newReq.Name) || _newReq.PurchasePrice <= 0 || _saving)">
+            @if (_saving) { <MudProgressCircular Size="Size.Small" Indeterminate="true" /> } else { <span>Add Asset</span> }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<AssetDto> _assets = [];
+    private bool _loading = true;
+    private string? _error;
+    private string? _bookTagFilter;
+    private bool _includeDisposed;
+
+    private bool _showDetailDialog;
+    private AssetDto? _selectedAsset;
+    private DepreciationScheduleDto? _schedule;
+    private bool _scheduleLoading;
+    private string _disposeType = "Sale";
+    private DateTime? _disposeDate = DateTime.Today;
+    private decimal _disposePrice;
+    private string? _disposeError;
+    private bool _disposing;
+
+    private bool _showAddDialog;
+    private CreateAssetRequest _newReq = new() { Category = "Other", DepreciationMethod = "StraightLine", MacrsClass = "5-year" };
+    private DateTime? _purchaseDate = DateTime.Today;
+    private int _usefulLifeYears = 5;
+    private string? _addError;
+    private bool _saving;
+
+    private static readonly string[] _categories = ["Vehicle", "Equipment", "Furniture", "Real Estate", "Other"];
+    private static readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Medium, FullWidth = true };
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try { _assets = await Finance.GetAssetsAsync(_bookTagFilter, _includeDisposed); }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+
+    private async Task SetBookTagFilter(string? tag)
+    {
+        _bookTagFilter = tag;
+        await LoadAsync();
+    }
+
+    private async Task OnRowClick(DataGridRowClickEventArgs<AssetDto> args)
+    {
+        _selectedAsset = args.Item;
+        _disposeType = "Sale";
+        _disposeDate = DateTime.Today;
+        _disposePrice = 0;
+        _disposeError = null;
+        _schedule = null;
+        _showDetailDialog = true;
+
+        _scheduleLoading = true;
+        StateHasChanged();
+        try { _schedule = await Finance.GetDepreciationScheduleAsync(_selectedAsset.Id); }
+        catch { }
+        finally { _scheduleLoading = false; }
+    }
+
+    private async Task ConfirmDispose()
+    {
+        if (_selectedAsset is null) return;
+        _disposeError = null;
+        _disposing = true;
+        try
+        {
+            var req = new DisposeAssetRequest
+            {
+                DisposalType = _disposeType,
+                SalePrice = _disposePrice,
+                DisposalDate = _disposeDate.HasValue
+                    ? new DateTimeOffset(_disposeDate.Value, TimeSpan.Zero)
+                    : DateTimeOffset.UtcNow
+            };
+            await Finance.DisposeAssetAsync(_selectedAsset.Id, req);
+            _showDetailDialog = false;
+            _schedule = null;
+            await LoadAsync();
+        }
+        catch (Exception ex) { _disposeError = ex.Message; }
+        finally { _disposing = false; }
+    }
+
+    private async Task SaveNewAsset()
+    {
+        _addError = null;
+        _saving = true;
+        try
+        {
+            _newReq.PurchaseDate = _purchaseDate.HasValue
+                ? new DateTimeOffset(_purchaseDate.Value, TimeSpan.Zero)
+                : DateTimeOffset.UtcNow;
+            _newReq.UsefulLifeYears = _newReq.DepreciationMethod == "StraightLine" ? _usefulLifeYears : null;
+            if (_newReq.DepreciationMethod != "MACRS") _newReq.MacrsClass = null;
+
+            await Finance.CreateAssetAsync(_newReq);
+            _showAddDialog = false;
+            _newReq = new() { Category = "Other", DepreciationMethod = "StraightLine", MacrsClass = "5-year" };
+            _purchaseDate = DateTime.Today;
+            _usefulLifeYears = 5;
+            await LoadAsync();
+        }
+        catch (Exception ex) { _addError = ex.Message; }
+        finally { _saving = false; }
+    }
+}

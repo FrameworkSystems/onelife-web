@@ -1,0 +1,33 @@
+@using OneLife.Web.Models.Finance.Assets
+
+@if (Schedule is null)
+{
+    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="120px" />
+}
+else if (Schedule.Entries.Count == 0)
+{
+    <MudText Typo="Typo.body2" Color="Color.Secondary">No depreciation schedule available.</MudText>
+}
+else
+{
+    <MudTable Items="Schedule.Entries" Dense="true" Hover="true" Striped="true" Elevation="0">
+        <HeaderContent>
+            <MudTh>Period</MudTh>
+            <MudTh Style="text-align:right">Opening</MudTh>
+            <MudTh Style="text-align:right">Depreciation</MudTh>
+            <MudTh Style="text-align:right">Closing</MudTh>
+            <MudTh Style="text-align:right">Cumulative</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>@context.PeriodLabel</MudTd>
+            <MudTd Style="text-align:right">@context.OpeningBalance.ToString("C")</MudTd>
+            <MudTd Style="text-align:right;color:var(--mud-palette-error)">−@context.DepreciationAmount.ToString("C")</MudTd>
+            <MudTd Style="text-align:right;font-weight:600">@context.ClosingBalance.ToString("C")</MudTd>
+            <MudTd Style="text-align:right;color:var(--mud-palette-text-secondary)">@context.CumulativeDepreciation.ToString("C")</MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    [Parameter, EditorRequired] public DepreciationScheduleDto? Schedule { get; set; }
+}

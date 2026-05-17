@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using OneLife.Web.Models.Finance;
+using OneLife.Web.Models.Finance.Assets;
 using OneLife.Web.Models.Finance.Business;
 
 namespace OneLife.Web.Services;
@@ -146,5 +147,42 @@ public sealed class FinanceWebService
         var result = await _http.GetFromJsonAsync<List<CustomerDto>>(
             $"/api/finance/business/customers?userId={Uri.EscapeDataString(UserId)}", ct);
         return result ?? [];
+    }
+
+    public async Task<List<AssetDto>> GetAssetsAsync(string? bookTag = null, bool includeDisposed = false, CancellationToken ct = default)
+    {
+        var path = $"/api/finance/assets?userId={Uri.EscapeDataString(UserId)}&includeDisposed={includeDisposed}";
+        if (bookTag is not null) path += $"&bookTag={Uri.EscapeDataString(bookTag)}";
+        var result = await _http.GetFromJsonAsync<List<AssetDto>>(path, ct);
+        return result ?? [];
+    }
+
+    public async Task<AssetDto?> CreateAssetAsync(CreateAssetRequest req, CancellationToken ct = default)
+    {
+        req.UserId = UserId;
+        var resp = await _http.PostAsJsonAsync("/api/finance/assets", req, ct);
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadFromJsonAsync<AssetDto>(cancellationToken: ct);
+    }
+
+    public async Task<AssetDto?> DisposeAssetAsync(string assetId, DisposeAssetRequest req, CancellationToken ct = default)
+    {
+        req.UserId = UserId;
+        var resp = await _http.PostAsJsonAsync($"/api/finance/assets/{Uri.EscapeDataString(assetId)}/dispose", req, ct);
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadFromJsonAsync<AssetDto>(cancellationToken: ct);
+    }
+
+    public async Task<DepreciationScheduleDto?> GetDepreciationScheduleAsync(string assetId, CancellationToken ct = default)
+    {
+        return await _http.GetFromJsonAsync<DepreciationScheduleDto>(
+            $"/api/finance/assets/{Uri.EscapeDataString(assetId)}/depreciation-schedule?userId={Uri.EscapeDataString(UserId)}", ct);
+    }
+
+    public async Task<NetWorthDto?> GetNetWorthAsync(string? bookTag = null, CancellationToken ct = default)
+    {
+        var path = $"/api/finance/net-worth?userId={Uri.EscapeDataString(UserId)}";
+        if (bookTag is not null) path += $"&bookTag={Uri.EscapeDataString(bookTag)}";
+        return await _http.GetFromJsonAsync<NetWorthDto>(path, ct);
     }
 }
